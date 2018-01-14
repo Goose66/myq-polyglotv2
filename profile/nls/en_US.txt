@@ -1,9 +1,8 @@
 ND-CONTROLLER-NAME = MyQ Node Server
 ND-CONTROLLER-ICON = GenericCtl
 ST-CTR-ST-NAME = NodeServer Online
-ST-CTR-GV1-NAME = Polyglot Online
-ST-CTR-GV2-NAME = MyQ Service Connected
-ST-CTR-GV3-NAME = Gateway(s) Online
+ST-CTR-GV0-NAME = MyQ Service Connected
+ST-CTR-GV1-NAME = Gateway(s) Online
 ND-GARAGE_DOOR_OPENER-NAME = LiftMaster Garage Door Opener
 ND-GARAGE_DOOR_OPENER-ICON = DoorLock
 ST-GDO-ST-NAME = Door State

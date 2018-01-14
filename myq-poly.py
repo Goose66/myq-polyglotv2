@@ -7,7 +7,6 @@ import time
 from myqapi import MyQ, DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_GATEWAY
 import polyinterface
 
-
 _ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
 _ISY_BARRIER_STATUS_UOM = 97 # 0=Closed, 100=Open, 101=Unknown, 102=Stopped, 103=Closing, 104=Opening
 _ISY_INDEX_UOM = 25 # Index UOM for custom door states below (must match editor/NLS in profile)
@@ -25,10 +24,6 @@ _LOGGER = polyinterface.LOGGER
 class GarageDoorOpener(polyinterface.Node):
 
     id = "GARAGE_DOOR_OPENER"
-
-    # Temporarily override the start() method in the Node class
-    def start(self):
-        pass
 
     # Open Door
     def cmd_don(self, command):
@@ -56,6 +51,10 @@ class GarageDoorOpener(polyinterface.Node):
 
     # Update node states
     def query(self):
+
+        _LOGGER.debug("Updating node states in GarageDoorOpener.query()...")
+        
+        # Update the node states and then report all driver values for node
         self.parent.update_node_states()
         self.reportDrivers()
 
@@ -72,7 +71,7 @@ class Controller(polyinterface.Controller):
 
     def __init__(self, poly):
         super(Controller, self).__init__(poly)
-        self.name = "MyQ Connection"
+        self.name = "MyQ Service"
         self.myQConnection = None
         self.active_poll = 20
         self.inactive_poll = 60
@@ -202,14 +201,13 @@ class Controller(polyinterface.Controller):
                         self.last_active = time.time()
 
         # Update the controller node states
-        self.setDriver("GV2", serviceStatus, True, forceReport)
-        self.setDriver("GV3", gatewayOnline, True, forceReport)
+        self.setDriver("GV0", serviceStatus, True, forceReport)
+        self.setDriver("GV1", gatewayOnline, True, forceReport)
 
     drivers = [
         {"driver": "ST", "value": 0, "uom": _ISY_BOOL_UOM},
-        {"driver": "GV1", "value": 0, "uom": _ISY_BOOL_UOM},
-        {"driver": "GV2", "value": 0, "uom": _ISY_BOOL_UOM},
-        {"driver": "GV3", "value": 0, "uom": _ISY_BOOL_UOM}
+        {"driver": "GV0", "value": 0, "uom": _ISY_BOOL_UOM},
+        {"driver": "GV1", "value": 0, "uom": _ISY_BOOL_UOM}
     ]
     commands = {"QUERY": query}
 

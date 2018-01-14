@@ -3,9 +3,8 @@
     <editors />
     <sts>
       <st id="ST" editor="CTR_BOOL" />
+      <st id="GV0" editor="CTR_BOOL" />
       <st id="GV1" editor="CTR_BOOL" />
-      <st id="GV2" editor="CTR_BOOL" />
-      <st id="GV3" editor="CTR_BOOL" />
     </sts>
     <cmds>
       <sends />
