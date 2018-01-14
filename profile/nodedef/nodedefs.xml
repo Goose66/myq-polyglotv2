@@ -1,0 +1,30 @@
+<nodeDefs>
+  <nodeDef id="CONTROLLER" nls="CTR">
+    <editors />
+    <sts>
+      <st id="ST" editor="CTR_BOOL" />
+      <st id="GV1" editor="CTR_BOOL" />
+      <st id="GV2" editor="CTR_BOOL" />
+      <st id="GV3" editor="CTR_BOOL" />
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="QUERY" />
+      </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="GARAGE_DOOR_OPENER" nls="GDO">
+    <editors />
+    <sts>
+      <st id="ST" editor="GDO_ST" />
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="DON" />
+        <cmd id="DOF" />
+      </accepts>
+    </cmds>
+  </nodeDef>
+</nodeDefs>

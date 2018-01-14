@@ -1,0 +1,12 @@
+{
+    "name": "LiftMaster MyQ",
+    "docs": "",
+    "type": "python",
+    "executable": "myq-poly.py",
+    "install": "",
+    "description": "Accesses the MyQ Web Service to allow ISY 994i to control LiftMaster garage door openers.",
+    "notice": "LifttMaster® and MyQ® are registered trademarks of The Chamberlain Group, Inc. 845 Larch Avenue. Elmhurst, Illinois 60126-1196.",
+    "shortPoll": "5",
+    "longPoll": "60",
+    "credits": []
+}
