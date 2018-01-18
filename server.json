@@ -10,12 +10,12 @@
     "longPoll": "60",
     "credits": [
         {
-           “title”: “myq-poly: a Polyglot NodeServer for Liftmaster MyQ Integration”,
-           “author”: “W. Randy King”,
-           “version”: “1.0.0”,
-           “date”: “January 17, 2018”,
-           “source”: "https://github.com/Goose66/myq-polyglotv2“,
-           “license”: “https://github.com/Goose66/myq-polyglotv2/master/LICENSE”
+           "title": "myq-poly: a Polyglot NodeServer for Liftmaster MyQ Integration",
+           "author": "W. Randy King",
+           "version": "1.0.0",
+           "date": "January 17, 2018",
+           "source": "https://github.com/Goose66/myq-polyglotv2",
+           "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"
        }
     ]
 }
