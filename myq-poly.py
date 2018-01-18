@@ -53,7 +53,7 @@ class GarageDoorOpener(polyinterface.Node):
     def query(self):
 
         _LOGGER.debug("Updating node states in GarageDoorOpener.query()...")
-        
+
         # Update the node states and then report all driver values for node
         self.parent.update_node_states()
         self.reportDrivers()
@@ -94,17 +94,17 @@ class Controller(polyinterface.Controller):
             raise
 
         # get polling intervals and ttl from custom configuration parameters
-        if "tokenttl" in customParams:
-            ttl = customParams["tokenttl"]
-        else:
+        try:
+            ttl = int(customParams["tokenttl"])
+        except (KeyError, ValueError):
             ttl = 900
-        if "activeupdateinterval" in customParams:
-            self.active_poll = customParams["activeupdateinterval"]
-        else:
+        try:
+            self.active_poll = int(customParams["activeupdateinterval"])
+        except (KeyError, ValueError):
             self.active_poll = 20
-        if "inactiveupdateinterval" in customParams:
-            self.inactive_poll = customParams["inactiveupdateinterval"]
-        else:
+        try:
+            self.inactive_poll = int(customParams["inactiveupdateinterval"])
+        except (KeyError, ValueError):
             self.inactive_poll = 60
 
         # create a connection to the MyQ cloud service
