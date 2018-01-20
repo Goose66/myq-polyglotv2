@@ -15,6 +15,10 @@ _DEVICE_GET_ATTR_ENDPOINT = "api/v4/DeviceAttribute/GetDeviceAttribute" # Never 
 _DOOR_STATE_SET_ATTR_NAME = "desireddoorstate"
 _DESIRED_DOOR_STATE_OPEN = 1
 _DESIRED_DOOR_STATE_CLOSED = 0
+_GATEWAY_DEVICE_TYPES = {1}
+_OPENER_DEVICE_TYPES = {2, 5, 7, 9, 17}
+_LIGHT_DEVICE_TYPES = {3, 15, 16}
+
 
 # Module level constants
 DEVICE_TYPE_GATEWAY = 1
@@ -167,20 +171,20 @@ class MyQ(object):
                     state = attribute["Value"]
                     last_updated = attribute["UpdatedDate"]
 
-            if deviceType == DEVICE_TYPE_GATEWAY: # Gateway
+            if deviceType in _GATEWAY_DEVICE_TYPES: # Gateway
 
                 deviceList.append({
-                    "type":deviceType,
+                    "type": DEVICE_TYPE_GATEWAY,
                     "id": deviceID,
                     "description": description,
                     "online": online,
                     "numdevices": numdevices
                 })
 
-            elif deviceType == DEVICE_TYPE_GARAGE_DOOR_OPENER: # GarageDoorOpener
+            elif deviceType in _OPENER_DEVICE_TYPES: # GarageDoorOpener
 
                 deviceList.append({
-                    "type":deviceType,
+                    "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
                     "id": deviceID,
                     "description": description,
                     "state": state,
