@@ -1,7 +1,7 @@
 {
     "name": "MyQ",
     "docs": "https://github.com/Goose66/myq-polyglotv2",
-    "type": "python",
+    "type": "python3",
     "executable": "myq-poly.py",
     "install": "install.sh",
     "description": "Accesses the MyQ Web Service to allow ISY 994i to control LiftMaster MyQ compatible garage door openers.",
@@ -12,7 +12,7 @@
         {
            "title": "myq-poly: a Polyglot NodeServer for Liftmaster MyQ Integration",
            "author": "W. Randy King",
-           "version": "1.0.2",
+           "version": "1.0.3",
            "date": "January 20, 2018",
            "source": "https://github.com/Goose66/myq-polyglotv2",
            "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"

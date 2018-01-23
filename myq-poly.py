@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # Polglot v2 Node Server for Chamberlain LiftMaster Garage Door Openers through MyQ Cloud Service
 
 import sys
@@ -97,7 +97,7 @@ class Controller(polyinterface.Controller):
         try:
             ttl = int(customParams["tokenttl"])
         except (KeyError, ValueError):
-            ttl = 900
+            ttl = 1200
         try:
             self.active_poll = int(customParams["activeupdateinterval"])
         except (KeyError, ValueError):
@@ -156,14 +156,14 @@ class Controller(polyinterface.Controller):
     #   forceReport - force reporting of all driver values (for query)
     def update_node_states(self, forceReport=False):
 
+        # initially set driver values for controller to false to reflect service connection is gone
+        serviceStatus = 0
+        gatewayOnline = 0
+
         # get device details from myQ service
         devices = self.myQConnection.get_device_list()
         if devices is None:
             _LOGGER.warning("get_device_list() returned no devices.")
-
-            # set driver values for controller to false to reflect service connection is gone
-            serviceStatus = 0
-            gatewayOnline = 0
 
         else:
 
