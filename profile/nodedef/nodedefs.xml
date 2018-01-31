@@ -23,6 +23,7 @@
       <accepts>
         <cmd id="DON" />
         <cmd id="DOF" />
+        <cmd id="QUERY" />
       </accepts>
     </cmds>
   </nodeDef>

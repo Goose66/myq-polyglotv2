@@ -1,7 +1,7 @@
 <editors>
   <editor id="CTR_BOOL">
     <!-- ISY Bool UOM -->
-    <range uom="2" />
+    <range uom="2" subset="0,1" />
   </editor>
   <editor id="GDO_ST">
     <!-- ISY Index UOM with custom labels in NLS -->

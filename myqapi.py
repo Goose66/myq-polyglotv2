@@ -68,7 +68,7 @@ class MyQ(object):
 
         # Allow timeout and connection errors to be ignored - log and return false
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            self._logger.warn("HTTP POST in update_security_token() failed: %s", str(e))
+            self._logger.warning("HTTP POST in update_security_token() failed: %s", str(e))
             return False
         except:
             self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])
@@ -113,7 +113,7 @@ class MyQ(object):
 
         # Allow timeout and connection errors to be ignored - log and return false
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            self._logger.warn("HTTP PUT in set_device_attribute() failed: %s", str(e))
+            self._logger.warning("HTTP PUT in set_device_attribute() failed: %s", str(e))
             return False
         except:
             self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])
@@ -143,7 +143,7 @@ class MyQ(object):
 
         # Allow timeout and connection errors to be ignored - log and return no data
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            self._logger.warn("HTTP PUT in get_device_list() failed: %s", str(e))
+            self._logger.warning("HTTP GET in get_device_list() failed: %s", str(e))
             return None
         except:
             self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])

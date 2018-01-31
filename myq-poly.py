@@ -61,7 +61,8 @@ class GarageDoorOpener(polyinterface.Node):
     drivers = [{"driver": "ST", "value": _IX_GDO_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
     commands = {
         "DON": cmd_don,
-        "DOF": cmd_dof
+        "DOF": cmd_dof,
+        "QUERY": query
     }
 
 # Controller class
