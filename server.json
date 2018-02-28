@@ -4,16 +4,16 @@
     "type": "python3",
     "executable": "myq-poly.py",
     "install": "install.sh",
-    "description": "Accesses the MyQ Web Service to allow ISY 994i to control LiftMaster MyQ compatible garage door openers.",
-    "notice": "LifttMaster® and MyQ® are registered trademarks of The Chamberlain Group, Inc. 845 Larch Avenue. Elmhurst, Illinois 60126-1196.",
+    "description": "Accesses the MyQ Web Service to allow ISY 994i to control LiftMaster/Chamberlain MyQ compatible garage door openers.",
+    "notice": "LifttMaster®, Chamberlain®, and MyQ® are registered trademarks of The Chamberlain Group, Inc. 845 Larch Avenue. Elmhurst, Illinois 60126-1196.",
     "shortPoll": "5",
     "longPoll": "60",
     "credits": [
         {
-           "title": "myq-poly: a Polyglot NodeServer for Liftmaster MyQ Integration",
-           "author": "W. Randy King",
-           "version": "1.1.1",
-           "date": "January 31, 2018",
+           "title": "myq-poly: a Polyglot NodeServer for Liftmaster/Chamberlain MyQ Integration",
+           "author": "W. Randy King (Goose66)",
+           "version": "1.2.0",
+           "date": "February 28, 2018",
            "source": "https://github.com/Goose66/myq-polyglotv2",
            "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"
        }

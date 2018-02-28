@@ -19,6 +19,10 @@ _GATEWAY_DEVICE_TYPES = {1}
 _OPENER_DEVICE_TYPES = {2, 5, 7, 9, 17}
 _LIGHT_DEVICE_TYPES = {3, 15, 16}
 
+# Timeout durations for HTTP calls - defined here for easy tweaking
+_HTTP_GET_TIMEOUT = 12.05
+_HTTP_PUT_TIMEOUT = 3.05
+_HTTP_POST_TIMEOUT = 6.05
 
 # Module level constants
 DEVICE_TYPE_GATEWAY = 1
@@ -62,7 +66,7 @@ class MyQ(object):
                     login_endpoint=_LOGIN_ENDPOINT
                 ),
                 json=params,
-                timeout=6.05
+                timeout=_HTTP_POST_TIMEOUT
             )
             response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
 
@@ -107,7 +111,7 @@ class MyQ(object):
                     device_set_endpoint=_DEVICE_SET_ATTR_ENDPOINT
                 ),
                 data=payload,
-                timeout=3.05
+                timeout=_HTTP_PUT_TIMEOUT
             )
             response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
 
@@ -137,7 +141,7 @@ class MyQ(object):
                     host_uri=_HOST_URI,
                     device_list_endpoint=_DEVICE_LIST_ENDPOINT
                 ),
-                timeout=6.05
+                timeout=_HTTP_GET_TIMEOUT
             )
             response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
 
@@ -171,6 +175,9 @@ class MyQ(object):
                     state = attribute["Value"]
                     last_updated = attribute["UpdatedDate"]
 
+            # uncomment the next line to inspect the devices returned from the MyQ service
+            #self._logger.debug("Device Found - DeviceId: %s, DeviceTypeId: %s, Description: %s", deviceID, deviceType, description)
+
             if deviceType in _GATEWAY_DEVICE_TYPES: # Gateway
 
                 deviceList.append({
@@ -183,15 +190,19 @@ class MyQ(object):
 
             elif deviceType in _OPENER_DEVICE_TYPES: # GarageDoorOpener
 
-                deviceList.append({
-                    "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
-                    "id": deviceID,
-                    "description": description,
-                    "state": state,
-                    "last_updated": last_updated,
-                    "allow_open": allow_open,
-                    "allow_close": allow_close
-                })
+                # devices without a description may not be initialized/setup in the MyQ Service
+                # so igonore them
+                if len(description) > 0:
+
+                    deviceList.append({
+                        "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
+                        "id": deviceID,
+                        "description": description,
+                        "state": state,
+                        "last_updated": last_updated,
+                        "allow_open": allow_open,
+                        "allow_close": allow_close
+                    })
 
         return deviceList
 

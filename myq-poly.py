@@ -49,6 +49,12 @@ class GarageDoorOpener(polyinterface.Node):
         else:
             _LOGGER.warning("Call to close() failed in DOF command handler.")
 
+    # Set to active mode and run query
+    def cmd_query(self, command):
+
+        self.parent.set_active_polling()
+        self.query()
+
     # Update node states
     def query(self):
 
@@ -62,7 +68,7 @@ class GarageDoorOpener(polyinterface.Node):
     commands = {
         "DON": cmd_don,
         "DOF": cmd_dof,
-        "QUERY": query
+        "QUERY": cmd_query
     }
 
 # Controller class
@@ -79,6 +85,11 @@ class Controller(polyinterface.Controller):
         self.active = False
         self.last_active = 0
         self.last_poll = 0
+
+    # Set the active polling mode (short polling interval)
+    def set_active_polling(self):
+        self.active = True
+        self.last_active =  time.time()
 
     # Start the node server
     def start(self):
@@ -111,10 +122,30 @@ class Controller(polyinterface.Controller):
         # create a connection to the MyQ cloud service
         self.myQConnection = MyQ(userName, password, ttl, _LOGGER)
 
+        # load nodes previously saved to the polyglot database
+        for addr in self._nodes:
+            
+            # ignore controller node
+            if addr != self.address:
+                
+                node = self._nodes[addr]
+                _LOGGER.debug("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node["node_def_id"])
+        
+                # add garage door opener nodes
+                if node["node_def_id"] == "GARAGE_DOOR_OPENER":
+                    self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
+                
+        # Update the node states and force report of all driver values
+        self.update_node_states(True)
+
         # startup in active mode polling
-        currentTime = time.time()
-        self.active = True
-        self.last_active = currentTime
+        self.set_active_polling()
+
+    # Set to active mode and run query
+    def cmd_query(self, command):
+
+        self.set_active_polling()
+        self.query()
 
     # Override query to perform status update from the MyQ service before reporting driver values
     def query(self):
@@ -138,10 +169,6 @@ class Controller(polyinterface.Controller):
 
         currentTime = time.time()
 
-        # reset active flag if 5 minutes has passed
-        if self.last_active < (currentTime - 300):
-            self.active = False
-
         # check for elapsed polling interval
         if ((self.active and (currentTime - self.last_poll) >= self.active_poll) or
                 (not self.active and (currentTime - self.last_poll) >= self.inactive_poll)):
@@ -150,8 +177,40 @@ class Controller(polyinterface.Controller):
             _LOGGER.debug("Updating node states in Controller.shortPoll()...")
             self.update_node_states()
 
-            self.last_poll = currentTime
+        # reset active flag if 5 minutes has passed
+        if self.last_active < (currentTime - 300):
+            self.active = False
 
+    # discover door nodes 
+    def cmd_discover(self, command):
+
+        # get device details from myQ service
+        devices = self.myQConnection.get_device_list()
+        if devices is None:
+            _LOGGER.warning("get_device_list() returned no devices.")
+
+        else:
+
+            # iterate devices
+            for device in devices:
+                _LOGGER.debug("Discovered device - addr: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
+
+                if device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
+                    
+                    # If no node already exists for the device, then add a node for the device
+                    if device["id"] not in self.nodes:
+                    
+                        gdoNode = GarageDoorOpener(
+                            self,
+                            self.address,
+                            device["id"],
+                            get_valid_node_name(device["description"])
+                        )
+                        self.addNode(gdoNode)
+
+                        # update the state value for the matching node
+                        gdoNode.setDriver("ST", get_st_driver_value(device["state"]))
+         
     # update the state of all nodes from the MyQ service
     # Parameters:
     #   forceReport - force reporting of all driver values (for query)
@@ -180,37 +239,34 @@ class Controller(polyinterface.Controller):
 
                 elif device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
 
-                    # if the node doesn't exist, create it
+                    # if a node exists for the device, update the driver values
                     if device["id"] in self.nodes:
                         gdoNode = self.nodes[device["id"]]
-                    else:
-                        gdoNode = GarageDoorOpener(
-                            self,
-                            self.address,
-                            device["id"],
-                            get_valid_node_name(device["description"])
-                        )
-                        self.addNode(gdoNode)
+     
+                        # update the state value for the matching node
+                        value = get_st_driver_value(device["state"])
+                        gdoNode.setDriver("ST", value, True, forceReport)
 
-                    # update the state value for the matching node
-                    value = get_st_driver_value(device["state"])
-                    gdoNode.setDriver("ST", value, True, forceReport)
-
-                    # if a device state has a door in motion, set the active mode flag  (affects polling interval)
-                    if value in [_IX_GDO_ST_CLOSING, _IX_GDO_ST_OPENING, _IX_GDO_ST_UNKNOWN]:
-                        self.active = True
-                        self.last_active = time.time()
-
+                        # if a device state has a door in motion, set the active polling mode
+                        if value in [_IX_GDO_ST_CLOSING, _IX_GDO_ST_OPENING, _IX_GDO_ST_UNKNOWN]:
+                            self.set_active_polling()
+        
         # Update the controller node states
         self.setDriver("GV0", serviceStatus, True, forceReport)
         self.setDriver("GV1", gatewayOnline, True, forceReport)
+
+        # Update the last polling time
+        self.last_poll = time.time()
 
     drivers = [
         {"driver": "ST", "value": 0, "uom": _ISY_BOOL_UOM},
         {"driver": "GV0", "value": 0, "uom": _ISY_BOOL_UOM},
         {"driver": "GV1", "value": 0, "uom": _ISY_BOOL_UOM}
     ]
-    commands = {"QUERY": query}
+    commands = {
+        "QUERY": cmd_query,
+        "DISCOVER": cmd_discover
+    }
 
 
 # Converts state value from MyQ to custom door states setup in editor/NLS in profile:
