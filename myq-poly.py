@@ -1,29 +1,32 @@
 #!/usr/bin/python3
-# Polglot v2 Node Server for Chamberlain LiftMaster Garage Door Openers through MyQ Cloud Service
+# Polglot v2 Node Server for Chamberlain LiftMaster Garage Door Openers and Light Switches through MyQ Cloud Service
 
 import sys
 import re
 import time
-from myqapi import MyQ, DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_GATEWAY
+from myqapi import MyQ, DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_LIGHT_SWITCH, DEVICE_TYPE_GATEWAY
 import polyinterface
 
 _ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
 _ISY_BARRIER_STATUS_UOM = 97 # 0=Closed, 100=Open, 101=Unknown, 102=Stopped, 103=Closing, 104=Opening
 _ISY_INDEX_UOM = 25 # Index UOM for custom door states below (must match editor/NLS in profile)
 _ISY_BOOL_UOM =2 # Used for reporting status values for Controller node
-_IX_GDO_ST_CLOSED = 0
-_IX_GDO_ST_OPEN = 1
+_IX_DEV_ST_OFF = 0
+_IX_DEV_ST_ON  = 1
 _IX_GDO_ST_STOPPED = 2
 _IX_GDO_ST_CLOSING = 3
 _IX_GDO_ST_OPENING = 4
-_IX_GDO_ST_UNKNOWN = 9
+_IX_DEV_ST_UNKNOWN = 9
+_ID_CTRL = "CONTROLLER"
+_ID_GDO  = "GARAGE_DOOR_OPENER"
+_ID_LS   = "LIGHT_SWITCH"
 
 _LOGGER = polyinterface.LOGGER
 
 # Node for a garage door opener
 class GarageDoorOpener(polyinterface.Node):
 
-    id = "GARAGE_DOOR_OPENER"
+    id = _ID_GDO
 
     # Open Door
     def cmd_don(self, command):
@@ -64,7 +67,50 @@ class GarageDoorOpener(polyinterface.Node):
         self.parent.update_node_states()
         self.reportDrivers()
 
-    drivers = [{"driver": "ST", "value": _IX_GDO_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
+    drivers = [{"driver": "ST", "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
+    commands = {
+        "DON": cmd_don,
+        "DOF": cmd_dof,
+        "QUERY": cmd_query
+    }
+
+# Node for a light switch
+class LightSwitch(polyinterface.Node):
+
+    id = _ID_LS
+
+    # Turn on
+    def cmd_don(self, command):
+
+        if self.parent.myQConnection.turn_on(self.address):
+            self.setDriver("ST", _IX_DEV_ST_ON)
+        else:
+            _LOGGER.warning("Call to open() failed in DON command handler.")
+
+    # Turn off
+    def cmd_dof(self, command):
+
+        if self.parent.myQConnection.turn_off(self.address):
+            self.setDriver("ST", _IX_DEV_ST_OFF)
+        else:
+            _LOGGER.warning("Call to close() failed in DOF command handler.")
+
+    # Set to active mode and run query
+    def cmd_query(self, command):
+
+        self.parent.set_active_polling()
+        self.query()
+
+    # Update node states
+    def query(self):
+
+        _LOGGER.debug("Updating node states in LightSwitch.query()...")
+
+        # Update the node states and then report all driver values for node
+        self.parent.update_node_states()
+        self.reportDrivers()
+
+    drivers = [{"driver": "ST", "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
     commands = {
         "DON": cmd_don,
         "DOF": cmd_dof,
@@ -74,7 +120,7 @@ class GarageDoorOpener(polyinterface.Node):
 # Controller class
 class Controller(polyinterface.Controller):
 
-    id = "CONTROLLER"
+    id = _ID_CTRL
 
     def __init__(self, poly):
         super(Controller, self).__init__(poly)
@@ -132,8 +178,12 @@ class Controller(polyinterface.Controller):
                 _LOGGER.debug("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node["node_def_id"])
         
                 # add garage door opener nodes
-                if node["node_def_id"] == "GARAGE_DOOR_OPENER":
+                if node["node_def_id"] == _ID_GDO:
                     self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
+
+                # add light switch nodes
+                elif node["node_def_id"] == _ID_LS:
+                    self.addNode(LightSwitch(self, self.address, addr, node["name"]))
                 
         # Update the node states and force report of all driver values
         self.update_node_states(True)
@@ -197,7 +247,7 @@ class Controller(polyinterface.Controller):
 
                 if device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
                     
-                    # If no node already exists for the device, then add a node for the device
+                    # If no node already exists for the garage door, then add a node for it
                     if device["id"] not in self.nodes:
                     
                         gdoNode = GarageDoorOpener(
@@ -211,6 +261,22 @@ class Controller(polyinterface.Controller):
                         # update the state value for the matching node
                         gdoNode.setDriver("ST", get_st_driver_value(device["state"]))
          
+                elif device["type"] == DEVICE_TYPE_LIGHT_SWITCH:
+                    
+                    # If no node already exists for the light switch, then add a node for it
+                    if device["id"] not in self.nodes:
+                    
+                        lightNode = LightSwitch(
+                            self,
+                            self.address,
+                            device["id"],
+                            get_valid_node_name(device["description"])
+                        )
+                        self.addNode(lightNode)
+
+                        # update the state value for the matching node
+                        lightNode.setDriver("ST", get_st_driver_value(device["state"]))
+
     # update the state of all nodes from the MyQ service
     # Parameters:
     #   forceReport - force reporting of all driver values (for query)
@@ -237,18 +303,18 @@ class Controller(polyinterface.Controller):
                     # Update controller node state value
                     gatewayOnline = 1 if device["online"] else 0
 
-                elif device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
+                elif device["type"] in [DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_LIGHT_SWITCH]:
 
                     # if a node exists for the device, update the driver values
                     if device["id"] in self.nodes:
-                        gdoNode = self.nodes[device["id"]]
+                        deviceNode = self.nodes[device["id"]]
      
                         # update the state value for the matching node
                         value = get_st_driver_value(device["state"])
-                        gdoNode.setDriver("ST", value, True, forceReport)
+                        deviceNode.setDriver("ST", value, True, forceReport)
 
                         # if a device state has a door in motion, set the active polling mode
-                        if value in [_IX_GDO_ST_CLOSING, _IX_GDO_ST_OPENING, _IX_GDO_ST_UNKNOWN]:
+                        if value in [_IX_GDO_ST_CLOSING, _IX_GDO_ST_OPENING, _IX_DEV_ST_UNKNOWN]:
                             self.set_active_polling()
         
         # Update the controller node states
@@ -272,22 +338,22 @@ class Controller(polyinterface.Controller):
 # Converts state value from MyQ to custom door states setup in editor/NLS in profile:
 #   0=Closed, 1=Open, 2=Stopped, 3=Closing, 4=Opening, 9=Unknown
 def get_st_driver_value(state):
-    if state == "1":    # open
-        return _IX_GDO_ST_OPEN
-    elif state == "2":  # closed
-        return _IX_GDO_ST_CLOSED
-    elif state == "3":  # stopped
+    if state == "0":  # off; lights only
+        return _IX_DEV_ST_OFF
+    elif state == "1":    # on/open
+        return _IX_DEV_ST_ON
+    elif state == "2": # closed; garage only
+        return _IX_DEV_ST_OFF
+    elif state == "3":  # garage stopped
         return _IX_GDO_ST_STOPPED
-    elif state == "4":  # opening
+    elif state == "4":  # garage opening
         return _IX_GDO_ST_OPENING
-    elif state == "5":  # closing
+    elif state == "5":  # garage closing
         return _IX_GDO_ST_CLOSING
-    elif state == "8":  # moving
-        return _IX_GDO_ST_UNKNOWN
-    elif state == "9":  # open
+    elif state == "9":  # garage open
         return _IX_GDO_ST_OPEN
     else:
-        return _IX_GDO_ST_UNKNOWN
+        return _IX_DEV_ST_UNKNOWN
 
 # Removes invalid charaters for ISY Node description
 def get_valid_node_name(name):

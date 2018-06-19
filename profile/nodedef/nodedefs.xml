@@ -28,4 +28,18 @@
       </accepts>
     </cmds>
   </nodeDef>
+  <nodeDef id="LIGHT_SWITCH" nls="LS">
+    <editors />
+    <sts>
+      <st id="ST" editor="LS_ST" />
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="DON" />
+        <cmd id="DOF" />
+        <cmd id="QUERY" />
+      </accepts>
+    </cmds>
+  </nodeDef>
 </nodeDefs>

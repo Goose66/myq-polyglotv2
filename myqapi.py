@@ -13,8 +13,11 @@ _DEVICE_LIST_ENDPOINT = "api/v4/UserDeviceDetails/Get"
 _DEVICE_SET_ATTR_ENDPOINT = "api/v4/DeviceAttribute/PutDeviceAttribute"
 _DEVICE_GET_ATTR_ENDPOINT = "api/v4/DeviceAttribute/GetDeviceAttribute" # Never tested
 _DOOR_STATE_SET_ATTR_NAME = "desireddoorstate"
+_LIGHT_STATE_SET_ATTR_NAME = "desiredlightstate"
 _DESIRED_DOOR_STATE_OPEN = 1
 _DESIRED_DOOR_STATE_CLOSED = 0
+_DESIRED_LIGHT_STATE_ON = 1
+_DESIRED_LIGHT_STATE_OFF = 0
 _GATEWAY_DEVICE_TYPES = {1}
 _OPENER_DEVICE_TYPES = {2, 5, 7, 9, 17}
 _LIGHT_DEVICE_TYPES = {3, 15, 16}
@@ -27,6 +30,7 @@ _HTTP_POST_TIMEOUT = 6.05
 # Module level constants
 DEVICE_TYPE_GATEWAY = 1
 DEVICE_TYPE_GARAGE_DOOR_OPENER = 2
+DEVICE_TYPE_LIGHT_SWITCH = 3
 
 class MyQ(object):
 
@@ -171,7 +175,7 @@ class MyQ(object):
                     allow_open = attribute["Value"] == "1"
                 elif attribute["AttributeDisplayName"] == "isunattendedcloseallowed":
                     allow_close = attribute["Value"] == "1"
-                elif attribute["AttributeDisplayName"] == "doorstate":
+                elif attribute["AttributeDisplayName"] in ["doorstate", "lightstate"]:
                     state = attribute["Value"]
                     last_updated = attribute["UpdatedDate"]
 
@@ -191,7 +195,7 @@ class MyQ(object):
             elif deviceType in _OPENER_DEVICE_TYPES: # GarageDoorOpener
 
                 # devices without a description may not be initialized/setup in the MyQ Service
-                # so igonore them
+                # so ignore them
                 if len(description) > 0:
 
                     deviceList.append({
@@ -204,6 +208,16 @@ class MyQ(object):
                         "allow_close": allow_close
                     })
 
+            elif deviceType in _LIGHT_DEVICE_TYPES: # LightSwitch 
+                if len(description) > 0:
+                    deviceList.append({
+                        "type": DEVICE_TYPE_LIGHT_SWITCH,
+                        "id": deviceID,
+                        "description": description,
+                        "state": state,
+                        "last_updated": last_updated
+                    })
+
         return deviceList
 
     def open(self, deviceID):
@@ -211,3 +225,9 @@ class MyQ(object):
 
     def close(self, deviceID):
         return self.set_device_attribute(deviceID, _DOOR_STATE_SET_ATTR_NAME, _DESIRED_DOOR_STATE_CLOSED)
+
+    def turn_on(self, deviceID):
+        return self.set_device_attribute(deviceID, _LIGHT_STATE_SET_ATTR_NAME, _DESIRED_LIGHT_STATE_ON)
+
+    def turn_off(self, deviceID):
+        return self.set_device_attribute(deviceID, _LIGHT_STATE_SET_ATTR_NAME, _DESIRED_LIGHT_STATE_OFF)
