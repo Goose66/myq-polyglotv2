@@ -334,19 +334,17 @@ class Controller(polyinterface.Controller):
 # Converts state value from MyQ to custom door states setup in editor/NLS in profile:
 #   0=Closed, 1=Open, 2=Stopped, 3=Closing, 4=Opening, 9=Unknown
 def get_st_driver_value(state):
-    if state == "0":  # off; lights only
+    if state == "off" or state == "closed":
         return _IX_DEV_ST_OFF
-    elif state == "1":    # on/open
+    elif state == "on" or state == "open":
         return _IX_DEV_ST_ON
-    elif state == "2": # closed; garage only
-        return _IX_DEV_ST_OFF
-    elif state == "3":  # garage stopped
+    elif state == "stopped":
         return _IX_GDO_ST_STOPPED
-    elif state == "4":  # garage opening
+    elif state == "opening":
         return _IX_GDO_ST_OPENING
-    elif state == "5":  # garage closing
+    elif state == "closing":
         return _IX_GDO_ST_CLOSING
-    elif state == "9":  # garage open
+    elif state == "open":
         return _IX_GDO_ST_OPEN
     else:
         return _IX_DEV_ST_UNKNOWN
