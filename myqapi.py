@@ -6,21 +6,18 @@ import time
 import logging
 import requests
 
-_APP_ID = "Vj8pQggXLhLy0WHahglCD4N1nAkkXQtGYpq2HrHD7H1nvmbT55KqtN6RSF4ILB/i"
-_HOST_URI = "myqexternal.myqdevice.com"
-_LOGIN_ENDPOINT = "api/v4/User/Validate"
-_DEVICE_LIST_ENDPOINT = "api/v4/UserDeviceDetails/Get"
-_DEVICE_SET_ATTR_ENDPOINT = "api/v4/DeviceAttribute/PutDeviceAttribute"
-_DEVICE_GET_ATTR_ENDPOINT = "api/v4/DeviceAttribute/GetDeviceAttribute" # Never tested
-_DOOR_STATE_SET_ATTR_NAME = "desireddoorstate"
-_LIGHT_STATE_SET_ATTR_NAME = "desiredlightstate"
-_DESIRED_DOOR_STATE_OPEN = 1
-_DESIRED_DOOR_STATE_CLOSED = 0
-_DESIRED_LIGHT_STATE_ON = 1
-_DESIRED_LIGHT_STATE_OFF = 0
-_GATEWAY_DEVICE_TYPES = {1}
-_OPENER_DEVICE_TYPES = {2, 5, 7, 9, 17}
-_LIGHT_DEVICE_TYPES = {3, 15, 16}
+_APP_ID = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu"
+_HOST_URI = "api.myqdevice.com"
+_LOGIN_ENDPOINT = "api/v5/Login"
+_ACCOUNT_INFO_ENDPOINT = "api/v5/My"
+_DEVICE_BASE = "api/v5.1/Accounts"
+_DESIRED_DOOR_STATE_OPEN = "open"
+_DESIRED_DOOR_STATE_CLOSED = "close"
+_DESIRED_LIGHT_STATE_ON = "turnon"
+_DESIRED_LIGHT_STATE_OFF = "turnoff"
+_GATEWAY_DEVICE_TYPE = "ethernetgateway"
+_OPENER_DEVICE_TYPE = "garagedooropener"
+_LIGHT_DEVICE_TYPE = "lamp"
 
 # Timeout durations for HTTP calls - defined here for easy tweaking
 _HTTP_GET_TIMEOUT = 12.05
@@ -35,13 +32,14 @@ DEVICE_TYPE_LIGHT_SWITCH = 3
 class MyQ(object):
 
     # Primary constructor method
-    def __init__(self, userName, password, tokenTTL=600, logger=None):
+    def __init__(self, userName, password, tokenTTL=100, logger=None):
 
         # declare instance variables
         self._userName = userName
         self._password = password
         self._tokenTTL = tokenTTL
         self._securityToken = ""
+        self._accountId = ""
         self._lastTokenUpdate = 0
         self._myQSession = requests.Session()
         self._myQSession.headers.update({"MyQApplicationId": _APP_ID})
@@ -55,14 +53,11 @@ class MyQ(object):
 
     # Use the provided login info to obtain a security token
     def update_security_token(self):
-
         self._logger.debug("In update_security_token()...")
-
         params = {
-            "username": self._userName,
-            "password": self._password
+            "Username": self._userName,
+            "Password": self._password
         }
-
         try:
             response = self._myQSession.post(
                 "https://{host_uri}/{login_endpoint}".format(
@@ -73,7 +68,6 @@ class MyQ(object):
                 timeout=_HTTP_POST_TIMEOUT
             )
             response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
-
         # Allow timeout and connection errors to be ignored - log and return false
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
             self._logger.warning("HTTP POST in update_security_token() failed: %s", str(e))
@@ -88,40 +82,65 @@ class MyQ(object):
             self._myQSession.headers.update({"SecurityToken": self._securityToken})
             self._lastTokenUpdate = time.time()
             self._logger.info("MyQ security token updated")
+            self.refresh_account_info()
             return True
         else:
             self._logger.error("Security token not retrieved: %s", authContent["ErrorMessage"])
 
-    # Set the named attribute for the specified device to the specified value
-    def set_device_attribute(self, deviceID, attrName, attrValue):
+    def refresh_account_info(self):
+        params = { "expand": "account" }
+        try:
+            response = self._myQSession.get(
+                "https://{host_uri}/{info_endpoint}".format(
+                    host_uri=_HOST_URI,
+                    info_endpoint=_ACCOUNT_INFO_ENDPOINT
+                ),
+                params=params,
+                timeout=_HTTP_POST_TIMEOUT
+            )
+            response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
+        # Allow timeout and connection errors to be ignored - log and return false
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
+            self._logger.warning("HTTP GET in refresh_account_info() failed: %s", str(e))
+            return False
+        except:
+            self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])
+            raise
+        accountInfo = response.json()
+        if "Account" in accountInfo:
+            self._accountId = accountInfo["Account"]["Id"]
+            self._logger.info("Account ID updated")
+            return True
+        else:
+            self._logger.error("Account ID not retrieved: %s", authContent["ErrorMessage"])
+        
 
-        self._logger.debug("in set_device_attribute()...")
+    def set_device_state(self, deviceID, new_state):
+        self._logger.debug("in set_device_state()...")
 
         # update token if TTL has expired
         if time.time() > self._lastTokenUpdate + self._tokenTTL:
             if not self.update_security_token():
                 return False
 
-        payload = {
-            "attributeName": attrName,
-            "myQDeviceId": deviceID,
-            "AttributeValue": attrValue
-        }
+        payload = { "action_type": new_state }
 
         try:
             response = self._myQSession.put(
-                "https://{host_uri}/{device_set_endpoint}".format(
+                "https://{host_uri}/{device_base}/{account_id}/Devices/{device_id}/Actions".format(
                     host_uri=_HOST_URI,
-                    device_set_endpoint=_DEVICE_SET_ATTR_ENDPOINT
+                    device_base=_DEVICE_BASE,
+                    account_id=self._accountId,
+                    device_id=deviceID.upper()
                 ),
-                data=payload,
+                json=payload,
                 timeout=_HTTP_PUT_TIMEOUT
             )
             response.raise_for_status()    # Raise HTTP errors to be handled in exception handling
 
         # Allow timeout and connection errors to be ignored - log and return false
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            self._logger.warning("HTTP PUT in set_device_attribute() failed: %s", str(e))
+            self._logger.warning("HTTP PUT in set_device_state() failed: %s", str(e))
             return False
         except:
             self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])
@@ -141,9 +160,10 @@ class MyQ(object):
 
         try:
             response = self._myQSession.get(
-                "https://{host_uri}/{device_list_endpoint}".format(
+                "https://{host_uri}/{device_base}/{account_id}/Devices".format(
                     host_uri=_HOST_URI,
-                    device_list_endpoint=_DEVICE_LIST_ENDPOINT
+                    device_base=_DEVICE_BASE,
+                    account_id=self._accountId
                 ),
                 timeout=_HTTP_GET_TIMEOUT
             )
@@ -158,76 +178,61 @@ class MyQ(object):
             raise
 
         deviceList = []
-        for dev in response.json()["Devices"]:
+        if not "items" in response.json():
+            return deviceList
 
-            deviceID = str(dev["MyQDeviceId"])
-            deviceType = dev["MyQDeviceTypeId"]
-
-            # scan through device attributes and save the important ones
-            for attribute in dev["Attributes"]:
-                if attribute["AttributeDisplayName"] == "desc":
-                    description = attribute["Value"]
-                elif attribute["AttributeDisplayName"] == "online":
-                    online = attribute["Value"] == "True"
-                elif attribute["AttributeDisplayName"] == "numdevices":
-                    numdevices = attribute["Value"]
-                elif attribute["AttributeDisplayName"] == "isunattendedopenallowed":
-                    allow_open = attribute["Value"] == "1"
-                elif attribute["AttributeDisplayName"] == "isunattendedcloseallowed":
-                    allow_close = attribute["Value"] == "1"
-                elif attribute["AttributeDisplayName"] in ["doorstate", "lightstate"]:
-                    state = attribute["Value"]
-                    last_updated = attribute["UpdatedDate"]
+        for dev in response.json()["items"]:
+            deviceID = dev["serial_number"].lower() # Oh boy, ISY doesn't support uppercases in IDs... need to convert
+            deviceType = dev["device_type"]
+            description = dev["name"]
+            online = dev["state"]["online"]
 
             # uncomment the next line to inspect the devices returned from the MyQ service
             #self._logger.debug("Device Found - DeviceId: %s, DeviceTypeId: %s, Description: %s", deviceID, deviceType, description)
 
-            if deviceType in _GATEWAY_DEVICE_TYPES: # Gateway
-
+            if deviceType == _GATEWAY_DEVICE_TYPE:
                 deviceList.append({
                     "type": DEVICE_TYPE_GATEWAY,
                     "id": deviceID,
                     "description": description,
-                    "online": online,
-                    "numdevices": numdevices
+                    "online": online
                 })
-
-            elif deviceType in _OPENER_DEVICE_TYPES: # GarageDoorOpener
-
+            elif deviceType == _OPENER_DEVICE_TYPE and len(description) > 0:
                 # devices without a description may not be initialized/setup in the MyQ Service
                 # so ignore them
-                if len(description) > 0:
-
-                    deviceList.append({
-                        "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
-                        "id": deviceID,
-                        "description": description,
-                        "state": state,
-                        "last_updated": last_updated,
-                        "allow_open": allow_open,
-                        "allow_close": allow_close
-                    })
-
-            elif deviceType in _LIGHT_DEVICE_TYPES: # LightSwitch 
-                if len(description) > 0:
-                    deviceList.append({
-                        "type": DEVICE_TYPE_LIGHT_SWITCH,
-                        "id": deviceID,
-                        "description": description,
-                        "state": state,
-                        "last_updated": last_updated
-                    })
-
+                allow_open = dev["state"]["is_unattended_open_allowed"]
+                allow_close = dev["state"]["is_unattended_close_allowed"]
+                state = dev["state"]["door_state"]
+                last_update = dev["state"]["last_update"]
+                deviceList.append({
+                    "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
+                    "id": deviceID,
+                    "description": description,
+                    "state": state,
+                    "last_updated": last_update,
+                    "allow_open": allow_open,
+                    "allow_close": allow_close
+                })
+            elif deviceType == _LIGHT_DEVICE_TYPE and len(description) > 0:
+                state = dev["state"]["lamp_state"]
+                last_update = dev["state"]["last_update"]
+                deviceList.append({
+                    "type": DEVICE_TYPE_LIGHT_SWITCH,
+                    "id": deviceID,
+                    "description": description,
+                    "state": state,
+                    "last_updated": last_update
+                })
         return deviceList
 
     def open(self, deviceID):
-        return self.set_device_attribute(deviceID, _DOOR_STATE_SET_ATTR_NAME, _DESIRED_DOOR_STATE_OPEN)
+        return self.set_device_state(deviceID, _DESIRED_DOOR_STATE_OPEN)
 
     def close(self, deviceID):
-        return self.set_device_attribute(deviceID, _DOOR_STATE_SET_ATTR_NAME, _DESIRED_DOOR_STATE_CLOSED)
+        return self.set_device_state(deviceID, _DESIRED_DOOR_STATE_CLOSED)
 
     def turn_on(self, deviceID):
-        return self.set_device_attribute(deviceID, _LIGHT_STATE_SET_ATTR_NAME, _DESIRED_LIGHT_STATE_ON)
+        return self.set_device_state(deviceID, _DESIRED_LIGHT_STATE_ON)
 
     def turn_off(self, deviceID):
-        return self.set_device_attribute(deviceID, _LIGHT_STATE_SET_ATTR_NAME, _DESIRED_LIGHT_STATE_OFF)
+        return self.set_device_state(deviceID, _DESIRED_LIGHT_STATE_OFF)

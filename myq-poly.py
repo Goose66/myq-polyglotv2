@@ -238,18 +238,14 @@ class Controller(polyinterface.Controller):
         devices = self.myQConnection.get_device_list()
         if devices is None:
             _LOGGER.warning("get_device_list() returned no devices.")
-
         else:
-
             # iterate devices
             for device in devices:
                 _LOGGER.debug("Discovered device - addr: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
 
                 if device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
-                    
                     # If no node already exists for the garage door, then add a node for it
                     if device["id"] not in self.nodes:
-                    
                         gdoNode = GarageDoorOpener(
                             self,
                             self.address,
