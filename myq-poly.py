@@ -7,6 +7,7 @@ import time
 from myqapi import MyQ, DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_LIGHT_SWITCH, DEVICE_TYPE_GATEWAY
 import polyinterface
 
+_ISY_RAW_UOM = 56
 _ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
 _ISY_BARRIER_STATUS_UOM = 97 # 0=Closed, 100=Open, 101=Unknown, 102=Stopped, 103=Closing, 104=Opening
 _ISY_INDEX_UOM = 25 # Index UOM for custom door states below (must match editor/NLS in profile)
@@ -67,7 +68,8 @@ class GarageDoorOpener(polyinterface.Node):
         self.parent.update_node_states()
         self.reportDrivers()
 
-    drivers = [{"driver": "ST", "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
+    drivers = [{"driver": "ST",  "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM},
+               {"driver": "GV0", "value": 0, "uom": _ISY_RAW_UOM}]
     commands = {
         "DON": cmd_don,
         "DOF": cmd_dof,
@@ -110,7 +112,9 @@ class LightSwitch(polyinterface.Node):
         self.parent.update_node_states()
         self.reportDrivers()
 
-    drivers = [{"driver": "ST", "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM}]
+    drivers = [{"driver": "ST", "value": _IX_DEV_ST_UNKNOWN, "uom": _ISY_INDEX_UOM},
+               {"driver": "GV0", "value": 0, "uom": _ISY_RAW_UOM}]
+
     commands = {
         "DON": cmd_don,
         "DOF": cmd_dof,
@@ -256,6 +260,7 @@ class Controller(polyinterface.Controller):
 
                         # update the state value for the matching node
                         gdoNode.setDriver("ST", get_st_driver_value(device["state"]))
+                        gdoNode.setDriver("GV0", device["last_updated"])
          
                 elif device["type"] == DEVICE_TYPE_LIGHT_SWITCH:
                     
@@ -272,6 +277,7 @@ class Controller(polyinterface.Controller):
 
                         # update the state value for the matching node
                         lightNode.setDriver("ST", get_st_driver_value(device["state"]))
+                        lightNode.setDriver("GV0", device["last_updated"])
 
     # update the state of all nodes from the MyQ service
     # Parameters:
@@ -308,6 +314,7 @@ class Controller(polyinterface.Controller):
                         # update the state value for the matching node
                         value = get_st_driver_value(device["state"])
                         deviceNode.setDriver("ST", value, True, forceReport)
+                        deviceNode.setDriver("GV0", device["last_updated"], True, forceReport)
 
                         # if a device state has a door in motion, set the active polling mode
                         if value in [_IX_GDO_ST_CLOSING, _IX_GDO_ST_OPENING, _IX_DEV_ST_UNKNOWN]:

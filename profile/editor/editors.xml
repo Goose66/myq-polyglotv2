@@ -10,4 +10,10 @@
   <editor id="LS_ST">
     <range uom="25" subset="0,1,9" nls="IX_LS_ST" />
   </editor>
+  <editor id="LS_ST">
+    <range uom="25" subset="0,1,9" nls="IX_LS_ST" />
+  </editor>
+  <editor id="LS_ST">
+    <range uom="25" subset="0,1,9" nls="IX_LS_ST" />
+  </editor>
 </editors>

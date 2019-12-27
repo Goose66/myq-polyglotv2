@@ -5,6 +5,7 @@ import sys
 import time
 import logging
 import requests
+from calendar import timegm
 
 _APP_ID = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu"
 _HOST_URI = "api.myqdevice.com"
@@ -203,7 +204,7 @@ class MyQ(object):
                 allow_open = dev["state"]["is_unattended_open_allowed"]
                 allow_close = dev["state"]["is_unattended_close_allowed"]
                 state = dev["state"]["door_state"]
-                last_update = dev["state"]["last_update"]
+                last_update = self.convert_time(dev["state"]["last_update"])
                 deviceList.append({
                     "type": DEVICE_TYPE_GARAGE_DOOR_OPENER,
                     "id": deviceID,
@@ -215,7 +216,7 @@ class MyQ(object):
                 })
             elif deviceType == _LIGHT_DEVICE_TYPE and len(description) > 0:
                 state = dev["state"]["lamp_state"]
-                last_update = dev["state"]["last_update"]
+                last_update = self.convert_time(dev["state"]["last_update"])
                 deviceList.append({
                     "type": DEVICE_TYPE_LIGHT_SWITCH,
                     "id": deviceID,
@@ -236,3 +237,8 @@ class MyQ(object):
 
     def turn_off(self, deviceID):
         return self.set_device_state(deviceID, _DESIRED_LIGHT_STATE_OFF)
+
+    def convert_time(self, timestamp):
+        #  Input format: 2019-11-06T02:28:28.3802657Z
+        utc_time = time.strptime(timestamp[0:22] + "Z", "%Y-%m-%dT%H:%M:%S.%fZ")
+        return timegm(utc_time)
