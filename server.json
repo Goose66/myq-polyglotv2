@@ -13,7 +13,7 @@
         {
            "title": "myq-poly: a Polyglot NodeServer for Liftmaster/Chamberlain MyQ Integration",
            "author": "W. Randy King (Goose66)",
-           "version": "1.3.7",
+           "version": "1.3.8",
            "date": "July 12, 2020",
            "source": "https://github.com/Goose66/myq-polyglotv2",
            "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"
