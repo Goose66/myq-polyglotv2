@@ -153,8 +153,12 @@ class MyQ(object):
                 if self._accountID == "":
                     response = self._call_api(_API_GET_ACCOUNT_INFO, params)
                     if response and response.status_code == 200:
-                        accountID = response.json().get("UserId", "")
+
+                        # get the Account ID from the account href parameter - NOT necessarily the same as the UserId
+                        accountHref = response.json()["Account"]["href"]
+                        accountID = accountHref[accountHref.rfind("/")+1:]
                         self._accountID = accountID
+                        
                         return True
 
                     else:
