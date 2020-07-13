@@ -1,11 +1,11 @@
 # myq-polyglotv2
 A NodeServer for the Polyglot v2 that interfaces with LiftMaster/Chamberlain MyQ Web Service to allow the ISY 994i to control LiftMaster/Chamberlain MyQ compatible garage door openers. See https://www.liftmaster.com/myqcompatibility for compatible garage door openers.
 
-Instructions for Local (Co-resident with Polyglot) installation:
+### Instructions for local Polyglot-V2 installation:
 
-1. Install the MyQ nodeserver from the Polyglot Nodeserver Store, or do a Git from the repository to the folder ~/.polyglot/nodeservers/MyQ in your Polyglot v2 installation.
-2. Log into the Polyglot Version 2 Dashboard (https://<Polyglot IP address>:3000)
-3. Add the MyQ nodeserver as a Local nodeserver type.
+1. Install the MyQ nodeserver from the Polyglot Nodeserver Store.
+2. Log into the Polyglot Dashboard (https://<Polyglot Server address>:3000)
+3. Add the MyQ nodeserver as a Local (Co-Resident with Polyglot) nodeserver type.
 4. Add the following required Custom Configuration Parameters under Configuration:
 ```
     "username" = login name for MyQ account

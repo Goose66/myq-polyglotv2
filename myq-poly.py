@@ -4,7 +4,7 @@
 import sys
 import re
 import time
-from myqapi import MyQ, DEVICE_TYPE_GARAGE_DOOR_OPENER, DEVICE_TYPE_GATEWAY
+from myqapi import MyQ, API_DEVICE_TYPE_GATEWAY, API_DEVICE_TYPE_OPENER, API_DEVICE_TYPE_LAMP, API_DEVICE_STATE_OPEN, API_DEVICE_STATE_CLOSED, API_DEVICE_STATE_STOPPED, API_DEVICE_STATE_OPENING, API_DEVICE_STATE_CLOSING, API_DEVICE_STATE_ON, API_DEVICE_STATE_OFF
 import polyinterface
 
 _ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
@@ -134,7 +134,11 @@ class Controller(polyinterface.Controller):
                 # add garage door opener nodes
                 if node["node_def_id"] == "GARAGE_DOOR_OPENER":
                     self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
-                
+
+
+        # Set the nodeserver status flag to indicate nodeserver is running
+        self.setDriver("ST", 1, True, True)                
+
         # Update the node states and force report of all driver values
         self.update_node_states(True)
 
@@ -181,6 +185,15 @@ class Controller(polyinterface.Controller):
         if self.last_active < (currentTime - 300):
             self.active = False
 
+    # shutdown the nodeserver on stop
+    def stop(self):
+
+        # close the MyQ HTTP session
+        self.myQConnection.disconnect()
+
+        # Set the nodeserver status flag to indicate nodeserver is stopped
+        self.setDriver("ST", 0, True, True)           
+
     # discover door nodes 
     def cmd_discover(self, command):
 
@@ -195,7 +208,7 @@ class Controller(polyinterface.Controller):
             for device in devices:
                 _LOGGER.debug("Discovered device - addr: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
 
-                if device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
+                if device["type"] == API_DEVICE_TYPE_OPENER:
                     
                     # If no node already exists for the device, then add a node for the device
                     if device["id"] not in self.nodes:
@@ -232,12 +245,12 @@ class Controller(polyinterface.Controller):
 
             for device in devices:
 
-                if device["type"] == DEVICE_TYPE_GATEWAY:
+                if device["type"] == API_DEVICE_TYPE_GATEWAY:
 
                     # Update controller node state value
                     gatewayOnline = 1 if device["online"] else 0
 
-                elif device["type"] == DEVICE_TYPE_GARAGE_DOOR_OPENER:
+                elif device["type"] == API_DEVICE_TYPE_OPENER:
 
                     # if a node exists for the device, update the driver values
                     if device["id"] in self.nodes:
@@ -272,20 +285,16 @@ class Controller(polyinterface.Controller):
 # Converts state value from MyQ to custom door states setup in editor/NLS in profile:
 #   0=Closed, 1=Open, 2=Stopped, 3=Closing, 4=Opening, 9=Unknown
 def get_st_driver_value(state):
-    if state == "1":    # open
+    if state == API_DEVICE_STATE_OPEN:    # open
         return _IX_GDO_ST_OPEN
-    elif state == "2":  # closed
+    elif state == API_DEVICE_STATE_CLOSED:  # closed
         return _IX_GDO_ST_CLOSED
-    elif state == "3":  # stopped
+    elif state == API_DEVICE_STATE_STOPPED:  # stopped
         return _IX_GDO_ST_STOPPED
-    elif state == "4":  # opening
+    elif state == API_DEVICE_STATE_OPENING:  # opening
         return _IX_GDO_ST_OPENING
-    elif state == "5":  # closing
+    elif state == API_DEVICE_STATE_CLOSING:  # closing
         return _IX_GDO_ST_CLOSING
-    elif state == "8":  # moving
-        return _IX_GDO_ST_UNKNOWN
-    elif state == "9":  # open
-        return _IX_GDO_ST_OPEN
     else:
         return _IX_GDO_ST_UNKNOWN
 

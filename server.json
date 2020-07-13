@@ -8,12 +8,13 @@
     "notice": "LifttMaster®, Chamberlain®, and MyQ® are registered trademarks of The Chamberlain Group, Inc. 845 Larch Avenue. Elmhurst, Illinois 60126-1196.",
     "shortPoll": "5",
     "longPoll": "60",
+    "profile_version": "1.3",
     "credits": [
         {
            "title": "myq-poly: a Polyglot NodeServer for Liftmaster/Chamberlain MyQ Integration",
            "author": "W. Randy King (Goose66)",
-           "version": "1.2.0",
-           "date": "February 28, 2018",
+           "version": "1.3.7",
+           "date": "July 12, 2020",
            "source": "https://github.com/Goose66/myq-polyglotv2",
            "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"
        }
