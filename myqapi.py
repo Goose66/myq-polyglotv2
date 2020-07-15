@@ -49,8 +49,8 @@ _API_DEVICE_ACTION_OPEN = "open"
 _API_DEVICE_ACTION_CLOSE = "close"
 _API_DEVICE_ACTION_TURN_ON = "turnon"
 _API_DEVICE_ACTION_TURN_OFF = "turnoff"
-API_DEVICE_TYPE_GATEWAY = "ethernetgateway"
-API_DEVICE_TYPE_OPENER = "garagedooropener"
+API_DEVICE_TYPE_GATEWAY = "gateway"
+API_DEVICE_TYPE_OPENER = "garagedoor"
 API_DEVICE_TYPE_LAMP = "lamp"
 API_DEVICE_STATE_OPEN = "open"
 API_DEVICE_STATE_CLOSED = "closed"
@@ -123,7 +123,7 @@ class MyQ(object):
             raise
 
         # uncomment the next line to dump HTTP response to log file for debugging
-        #self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
+        self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
 
         return response
 
@@ -228,13 +228,13 @@ class MyQ(object):
                     
                     # temporarily convert device ID to lowercase to preserve compatibility with old API module
                     deviceID = dev["serial_number"].lower()
-                    deviceType = dev["device_type"]
+                    deviceType = dev["device_family"]
                     description = dev["name"]
                     online = dev["state"]["online"]
                     last_updated = dev["state"]["last_status"]
 
                     # uncomment the next line to inspect the devices returned from the MyQ service
-                    #self._logger.debug("Device Found - DeviceId: %s, DeviceTypeId: %s, Description: %s", deviceID, deviceType, description)
+                    self._logger.debug("Device Found - Device ID: %s, Device Type: %s, Description: %s", deviceID, deviceType, description)
 
                     # add gateway type devices to the list
                     if deviceType == API_DEVICE_TYPE_GATEWAY:

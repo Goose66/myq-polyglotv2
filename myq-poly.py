@@ -28,6 +28,8 @@ class GarageDoorOpener(polyinterface.Node):
     # Open Door
     def cmd_don(self, command):
 
+        _LOGGER.info("Opening door for %s in DON command handler.", self.name)
+
         # Place the controller in active polling mode
         self.controller.active = True
         self.controller.last_active = time.time()
@@ -39,6 +41,8 @@ class GarageDoorOpener(polyinterface.Node):
 
     # Close Door
     def cmd_dof(self, command):
+
+        _LOGGER.info("Closing door for %s in DOF command handler.", self.name)
 
         # Place the controller in active polling mode
         self.controller.active = True
@@ -197,6 +201,8 @@ class Controller(polyinterface.Controller):
     # discover door nodes 
     def cmd_discover(self, command):
 
+        _LOGGER.info("Discovering devices in command handler: %s", str(command))
+
         # get device details from myQ service
         devices = self.myQConnection.get_device_list()
         if devices is None:
@@ -206,13 +212,14 @@ class Controller(polyinterface.Controller):
 
             # iterate devices
             for device in devices:
-                _LOGGER.debug("Discovered device - addr: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
 
                 if device["type"] == API_DEVICE_TYPE_OPENER:
                     
                     # If no node already exists for the device, then add a node for the device
                     if device["id"] not in self.nodes:
                     
+                        _LOGGER.info("Discovered new device - addr: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
+
                         gdoNode = GarageDoorOpener(
                             self,
                             self.address,
