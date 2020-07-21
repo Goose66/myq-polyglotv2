@@ -60,6 +60,10 @@ API_DEVICE_STATE_CLOSING = "closing"
 API_DEVICE_STATE_ON = "on"
 API_DEVICE_STATE_OFF = "off"
 
+API_LOGIN_BAD_AUTHENTICATION = 1
+API_LOGIN_ERROR = 3
+API_LOGIN_SUCCESS = 0
+
 # Timeout durations for HTTP calls - defined here for easy tweaking
 _HTTP_GET_TIMEOUT = 12.05
 _HTTP_PUT_TIMEOUT = 3.05
@@ -81,11 +85,9 @@ class MyQ(object):
     _logger = None
   
     # Primary constructor method
-    def __init__(self, userName, password, tokenTTL=100, logger=_LOGGER):
+    def __init__(self, tokenTTL=100, logger=_LOGGER):
 
-        # declare instance variables
-        self._userName = userName
-        self._password = password
+        # set instance variables
         self._tokenTTL = tokenTTL
         self._logger = logger
 
@@ -128,62 +130,49 @@ class MyQ(object):
         return response
 
     # Use the provided login info to obtain a security token
-    def _update_security_token(self):
-        self._logger.debug("In _update_security_token()...")
-        params = {
-            "Username": self._userName,
-            "Password": self._password
-        }
-        response = self._call_api(_API_LOGIN, params=params)
+    def _checkToken(self):
+       
+        self._logger.debug("In _checkToken()...")
 
-        # if data returned, update authentication and account info
-        if response:
+        # check TTL time
+        currentTime = time.time()
+        if currentTime - self._lastTokenUpdate > self._tokenTTL:
 
-            authInfo = response.json()
+            # format parameters
+            params = {
+                "Username": self._userName,
+                "Password": self._password
+            }
 
-            #   , update security token and account info
-            if response.status_code == 200:
+            # call the login API
+            response = self._call_api(_API_LOGIN, params=params)
+        
+            if response:
+                
+                authInfo = response.json()
+            
+                if response.status_code == 200:
 
-                token = authInfo["SecurityToken"]
-                self._session.headers.update({"SecurityToken": token})
-                self._lastTokenUpdate = time.time()
-                self._logger.info("MyQ security token updated")
+                    token = authInfo["SecurityToken"]
+                    self._session.headers.update({"SecurityToken": token})
+                    self._lastTokenUpdate = time.time()
 
-                # The account ID doesn't appear to change, so only update it if needed
-                if self._accountID == "":
-                    response = self._call_api(_API_GET_ACCOUNT_INFO, params)
-                    if response and response.status_code == 200:
-
-                        # get the Account ID from the account href parameter - NOT necessarily the same as the UserId
-                        accountHref = response.json()["Account"]["href"]
-                        accountID = accountHref[accountHref.rfind("/")+1:]
-                        self._accountID = accountID
-                        
-                        return True
-
-                    else:
-                        self._logger.error("Error retrieving account ID: %s", response.json().get("ErrorMessage", "No error message provided."))
-                        return False
                 else:
-                    return True
-    
-            else:
-                self._logger.error("Security token not retrieved: %s", authInfo.get("ErrorMessage", "No error message provided."))
-                return False
+                    
+                    # otherwise just log it and try to keep going with current tokens
+                    self._logger.error("Error retrieving security token: %s", response.json().get("ErrorMessage", "No error message provided."))
 
-        else:
-            # Error logged in _call_api function
-            return False
+            else:
+                    # logged in _call_api()
+                    pass
 
     # perform the specified action with the specified device
-    def _perform_action(self, deviceID, action):
+    def _performAction(self, deviceID, action):
 
-        self._logger.debug("In _perform_action()...")
+        self._logger.debug("In _performAction()...")
 
-        # update token if TTL has expired
-        if time.time() > self._lastTokenUpdate + self._tokenTTL:
-            if not self._update_security_token():
-                return False
+        # update the security token if needed    
+        self._checkToken()
 
         # set the action parameter
         params = {"action_type": action}
@@ -201,18 +190,79 @@ class MyQ(object):
             # Error logged in _call_api function
             return False
 
-    def get_device_list(self):
+    def loginToService(self, userName, password):
+        """Logs into the MyQ account and retrieves the account ID and access token.
+
+        Parameters:
+        username -- username (email address) for MyQ service (string)
+        password -- password for MyQ service (string)
+
+        Returns:
+        code indicating login success: API_LOGIN_SUCCESS, API_LOGIN_BAD_AUTHENTICATION, API_LOGIN_ERROR
+        """
+        self._logger.debug("in API loginToService()...")
+
+        # format parameters
+        params = {
+            "Username": userName,
+            "Password": password
+        }
+
+        # call the login API
+        response  = self._call_api(_API_LOGIN, params=params)
+        
+        # if data returned, parse the access tokens and store in the instance variables
+        if response:
+        
+            authInfo = response.json()
+        
+            if response.status_code == 200:
+
+                token = authInfo["SecurityToken"]
+                self._session.headers.update({"SecurityToken": token})
+                self._lastTokenUpdate = time.time()
+
+                self._userName = userName
+                self._password = password
+
+                # Retrieve the account ID for subsequent calls
+                response = self._call_api(_API_GET_ACCOUNT_INFO)
+                if response and response.status_code == 200:
+
+                    # get the Account ID from the account href parameter - NOT necessarily the same as the UserId
+                    accountHref = response.json()["Account"]["href"]
+                    accountID = accountHref[accountHref.rfind("/")+1:]
+                    self._accountID = accountID
+
+                    return API_LOGIN_SUCCESS
+                else:
+
+                    self._logger.error("Error retrieving account ID: %s", response.json().get("ErrorMessage", "No error message provided."))
+                    return API_LOGIN_ERROR
+
+            # check for authentication error (bad credentials)
+            elif response.status_code == 401:
+
+                return API_LOGIN_BAD_AUTHENTICATION
+
+            else:
+                self._logger.error("Error logging into MyQ service: %s", authInfo.get("ErrorMessage", "No error message provided."))
+                return API_LOGIN_ERROR
+
+        else:
+            self._logger.error("Error logging into MyQ service.")
+            return API_LOGIN_ERROR
+
+    def getDeviceList(self):
         """Returns a list of devices in the account
 
         Returns:
-        dictionary of devices (openers, lights, gateways)
+        list (array) of devices (openers, lights, gateways)
         """
-        self._logger.debug("In get_device_list()...")
+        self._logger.debug("In getDeviceList()...")
 
-        # update token if TTL has expired
-        if time.time() > self._lastTokenUpdate + self._tokenTTL:
-            if not self._update_security_token():
-                return None
+        # update the security token if needed    
+        self._checkToken()
 
         response = self._call_api(_API_GET_DEVICE_LIST )
 
@@ -226,12 +276,12 @@ class MyQ(object):
 
                 for dev in deviceInfo["items"]:
                     
-                    # temporarily convert device ID to lowercase to preserve compatibility with old API module
-                    deviceID = dev["serial_number"].lower()
+                    # pull out common attributes
+                    deviceID = dev["serial_number"]
                     deviceType = dev["device_family"]
                     description = dev["name"]
                     online = dev["state"]["online"]
-                    last_updated = dev["state"]["last_status"]
+                    lastUpdated = dev["state"]["last_status"]
 
                     # uncomment the next line to inspect the devices returned from the MyQ service
                     self._logger.debug("Device Found - Device ID: %s, Device Type: %s, Description: %s", deviceID, deviceType, description)
@@ -243,32 +293,41 @@ class MyQ(object):
                             "id": deviceID,
                             "description": description,
                             "online": online,
-                            "last_updated": last_updated
+                            "last_updated": lastUpdated
                         })
 
-                    elif deviceType == API_DEVICE_TYPE_OPENER:
+                    else:
+                        
+                        lastChanged = dev["state"]["last_update"]
+                        parentID = dev["parent_device_id"]                        
+                        
+                        if deviceType == API_DEVICE_TYPE_OPENER:
     
-                        # get the door state
-                        state = dev["state"]["door_state"]
-                        deviceList.append({
-                            "type": deviceType,
-                            "id": deviceID,
-                            "description": description,
-                            "state": state,
-                            "last_updated": last_updated
-                        })
-    
-                    elif deviceType == API_DEVICE_TYPE_LAMP:
+                            # get the door state
+                            state = dev["state"]["door_state"]
+                            deviceList.append({
+                                "type": deviceType,
+                                "id": deviceID,
+                                "parent_id": parentID,
+                                "description": description,
+                                "state": state,
+                                "last_changed": lastChanged,
+                                "last_updated": lastUpdated
+                            })
+        
+                        elif deviceType == API_DEVICE_TYPE_LAMP:
 
-                        # get the lamp state
-                        state = dev["state"]["lamp_state"]
-                        deviceList.append({
-                            "type": deviceType,
-                            "id": deviceID,
-                            "description": description,
-                            "state": state,
-                            "last_updated": last_updated
-                    })
+                            # get the lamp state
+                            state = dev["state"]["lamp_state"]              
+                            deviceList.append({
+                                "type": deviceType,
+                                "id": deviceID,
+                                "parent_id": parentID,
+                                "description": description,
+                                "state": state,
+                                "last_changed": lastChanged,
+                                "last_updated": lastUpdated
+                        })
                 
                 return deviceList
             
@@ -279,7 +338,7 @@ class MyQ(object):
 
         else:
             # Error logged in _call_api function
-            return False
+            return None
 
 
     def open(self, deviceID):
@@ -289,8 +348,7 @@ class MyQ(object):
         Boolean indicating success of call
         """
         
-        # temporarily convert device ID back to uppercase to account for compatibility with old API module
-        return self._perform_action(deviceID.upper(), _API_DEVICE_ACTION_OPEN)
+        return self._performAction(deviceID, _API_DEVICE_ACTION_OPEN)
 
     def close(self, deviceID):
         """Closes the specified device (garage door opener)
@@ -299,28 +357,25 @@ class MyQ(object):
         Boolean indicating success of call
         """
         
-        # temporarily convert device ID back to uppercase to account for compatibility with old API module
-        return self._perform_action(deviceID.upper(), _API_DEVICE_ACTION_CLOSE)
+        return self._performAction(deviceID, _API_DEVICE_ACTION_CLOSE)
 
-    def turn_on(self, deviceID):
+    def turnOn(self, deviceID):
         """Turns on the specified device (light)
 
         Returns:
         Boolean indicating success of call
         """
-        
-        # temporarily convert device ID back to uppercase to account for compatibility with old API module
-        return self._perform_action(deviceID.upper(), _API_DEVICE_ACTION_TURN_ON)
 
-    def turn_off(self, deviceID):
+        return self._performAction(deviceID, _API_DEVICE_ACTION_TURN_ON)
+
+    def turnOff(self, deviceID):
         """Turns off the specified device (light)
 
         Returns:
         Boolean indicating success of call
         """
         
-        # temporarily convert device ID back to uppercase to account for compatibility with old API module
-        return self._perform_action(deviceID.upper(), _API_DEVICE_ACTION_TURN_ON)
+        return self._performAction(deviceID, _API_DEVICE_ACTION_TURN_ON)
 
     def disconnect(self):
         """Closes the HTTP session to the MyQ service)

@@ -1,10 +1,14 @@
 <editors>
-  <editor id="CTR_BOOL">
-    <!-- ISY Bool UOM -->
-    <range uom="2" subset="0,1" />
+  <editor id="CTR_LOGLEVEL">
+    <!-- ISY Index UOM with custom labels in NLS -->
+    <range uom="25" subset="0,10,20,30,40,50" nls="IX_CTR_LL" />
   </editor>
   <editor id="GDO_ST">
     <!-- ISY Index UOM with custom labels in NLS -->
     <range uom="25" subset="0-4,9" nls="IX_GDO_ST" />
+  </editor>
+  <editor id="LGT_ST">
+    <!-- ISY On/Off UOM -->
+    <range uom="78" />
   </editor>
 </editors>

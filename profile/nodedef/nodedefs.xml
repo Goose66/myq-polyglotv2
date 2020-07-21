@@ -2,29 +2,58 @@
   <nodeDef id="CONTROLLER" nls="CTR">
     <editors />
     <sts>
-      <st id="ST" editor="CTR_BOOL" />
-      <st id="GV0" editor="CTR_BOOL" />
-      <st id="GV1" editor="CTR_BOOL" />
+      <st id="ST" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV0" editor="_2_0" /> <!-- ISY Bool UOM -->
+      <st id="GV20" editor="CTR_LOGLEVEL" />
     </sts>
     <cmds>
       <sends />
       <accepts>
         <cmd id="DISCOVER" />
+        <cmd id="UPDATE_PROFILE" />
+        <cmd id="SET_LOGLEVEL">
+          <p id="" editor="CTR_LOGLEVEL" init="GV20" />
+        </cmd>          
         <cmd id="QUERY" />
       </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="GATEWAY" nls="GTW">
+    <editors />
+    <sts>
+      <st id="ST" editor="_2_0" /> <!-- ISY Bool UOM -->
+    </sts>
+    <cmds>
+      <sends />
+      <accepts />
     </cmds>
   </nodeDef>
   <nodeDef id="GARAGE_DOOR_OPENER" nls="GDO">
     <editors />
     <sts>
       <st id="ST" editor="GDO_ST" />
+      <st id="GV0" editor="_58_0" /> <!-- ISY Duration Seconds -->
     </sts>
     <cmds>
       <sends />
       <accepts>
         <cmd id="DON" />
         <cmd id="DOF" />
-        <cmd id="QUERY" />
+      </accepts>
+    </cmds>
+  </nodeDef>
+  <nodeDef id="LIGHT" nls="LGT">
+    <editors />
+    <sts>
+      <st id="ST" editor="LGT_ST" />
+    </sts>
+    <cmds>
+      <sends />
+      <accepts>
+        <cmd id="DON" />
+        <cmd id="DOF" />
+        <cmd id="DFON" />
+        <cmd id="DFOF" />        
       </accepts>
     </cmds>
   </nodeDef>
