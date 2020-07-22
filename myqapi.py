@@ -375,7 +375,7 @@ class MyQ(object):
         Boolean indicating success of call
         """
         
-        return self._performAction(deviceID, _API_DEVICE_ACTION_TURN_ON)
+        return self._performAction(deviceID, _API_DEVICE_ACTION_TURN_OFF)
 
     def disconnect(self):
         """Closes the HTTP session to the MyQ service)

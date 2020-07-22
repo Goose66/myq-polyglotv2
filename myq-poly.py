@@ -44,6 +44,23 @@ DEFAULT_INACTIVE_UPDATE_INTERVAL = 60
 
 ACTIVE_UPDATE_DURATION = 300 # 5 minutes of active polling and then switch to inactive
 
+# Node for gateway
+class Gateway(polyinterface.Node):
+
+    id = "GATEWAY"
+    hint = [0x01, 0x0e, 0x10, 0x00] # Residential/Gateway
+
+    def __init__(self, controller, primary, addr, name):
+        super(Gateway, self).__init__(controller, primary, addr, name)
+    
+        # make the gateway its own primary
+        # Note: this is because the ISY only supports one level of device hierarchy
+        self.primary = self.address
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": ISY_BOOL_UOM}
+    ]
+
 # Node for MyQ device - wrapper device to handle device ID
 class MyQ_Device(polyinterface.Node):
 
@@ -67,16 +84,6 @@ class MyQ_Device(polyinterface.Node):
             # store instance variables in polyglot custom data
             cData = self._deviceID
             controller.addCustomData(addr, cData)
-
-# Node for a garage door opener
-class Gateway(MyQ_Device):
-
-    id = "GATEWAY"
-    hint = [0x01, 0x0e, 0x10, 0x00] # Residential/Gateway
-
-    drivers = [
-        {"driver": "ST", "value": 0, "uom": ISY_BOOL_UOM}
-    ]
 
 # Node for a garage door opener
 class GarageDoorOpener(MyQ_Device):
@@ -128,7 +135,7 @@ class Light(MyQ_Device):
     # Turn on the light
     def cmd_don(self, command):
 
-        LOGGER.infor("Turn on light %s in DON command handler.", self.name)
+        LOGGER.info("Turn on light %s in DON command handler.", self.name)
 
         # Place the controller in active polling mode
         self.controller.setActiveMode()
@@ -142,7 +149,7 @@ class Light(MyQ_Device):
     # Turn off the light
     def cmd_dof(self, command):
 
-        LOGGER.infor("Turn off light %s in DOF command handler.", self.name)
+        LOGGER.info("Turn off light %s in DOF command handler.", self.name)
 
         # Place the controller in active polling mode
         self.controller.setActiveMode()
@@ -260,7 +267,7 @@ class Controller(polyinterface.Controller):
         self.updateNodeStates(True)
 
         # startup in active mode polling
-        self.setActivePolling()
+        self.setActiveMode()
 
     # shutdown the nodeserver on stop
     def stop(self):
@@ -312,7 +319,7 @@ class Controller(polyinterface.Controller):
 
         LOGGER.info("Query all devices: %s", str(command))
 
-        self.setActivePolling()
+        self.setActiveMode()
 
         # Update the node states and force report of all driver values
         self.updateNodeStates(True)
@@ -375,10 +382,9 @@ class Controller(polyinterface.Controller):
 
                         gwNode = Gateway(
                             self,
-                            devAddr,    # set the gateway to be its own primary
+                            self.address, # temporarily set primary to controller
                             devAddr,
-                            getValidNodeName(device["description"]),
-                            device["id"]
+                            getValidNodeName(device["description"])
                         )
                         self.addNode(gwNode)
 
@@ -427,6 +433,9 @@ class Controller(polyinterface.Controller):
 
                             # update the state values for the light node
                             devNode.setDriver("ST", getLampState(device["state"]))
+
+                # send custom data added by new nodes to polyglot
+                self.saveCustomData(self._customData)
     
     # update the state of all nodes from the MyQ service
     # Parameters:
@@ -469,7 +478,7 @@ class Controller(polyinterface.Controller):
 
                         # if a device state has a door in motion, set the active polling mode
                         if value in [IX_GDO_ST_CLOSING, IX_GDO_ST_OPENING, IX_GDO_ST_UNKNOWN]:
-                            self.setActivePolling()
+                            self.setActiveMode()
         
                     elif device["type"] == API_DEVICE_TYPE_LAMP:
     
@@ -492,7 +501,7 @@ class Controller(polyinterface.Controller):
     def getCustomData(self, key):
 
         # return data from custom data for key
-        return self._customData[key]
+        return self._customData.get(key)
 
     drivers = [
         {"driver": "ST", "value": 0, "uom": ISY_BOOL_UOM},
