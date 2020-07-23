@@ -10,6 +10,7 @@ except ImportError:
 import sys
 import re
 import time
+from datetime import datetime
 from myqapi import MyQ, API_DEVICE_TYPE_GATEWAY, API_DEVICE_TYPE_OPENER, API_DEVICE_TYPE_LAMP, API_DEVICE_STATE_OPEN, API_DEVICE_STATE_CLOSED, API_DEVICE_STATE_STOPPED, API_DEVICE_STATE_OPENING, API_DEVICE_STATE_CLOSING, API_DEVICE_STATE_ON, API_DEVICE_STATE_OFF, API_LOGIN_BAD_AUTHENTICATION, API_LOGIN_ERROR, API_LOGIN_SUCCESS
 
 LOGGER = polyinterface.LOGGER
@@ -174,11 +175,11 @@ class Controller(polyinterface.Controller):
 
     id = "CONTROLLER"
     _customData = {}
-    _active_poll = 0
-    _inactive_poll = 0
+    _activePollInterval = 0
+    _inactivePollInterval = 0
     _activePolling = False
-    _last_active = 0
-    _last_poll = 0
+    _lastActive = 0
+    _lastPoll = 0
     myQConnection = None
 
     def __init__(self, poly):
@@ -210,12 +211,13 @@ class Controller(polyinterface.Controller):
             LOGGER.warning("Missing MyQ service credentials in configuration.")
             self.addNotice("The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver.")
             self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
+            self.poly.stop() # stop the nodeserver so that the user can setup the custom parameters
             return
 
         # get remaining optional custom parameters 
         ttl = int(customParams.get(PARAM_TOKEN_TTL, DEFAULT_TOKEN_TTL))
-        self._active_poll = int(customParams.get(PARAM_ACTIVE_UPDATE_INTERVAL, DEFAULT_ACTIVE_UPDATE_INTERVAL))
-        self._inactive_poll = int(customParams.get(PARAM_INACTIVE_UPDATE_INTERVAL, DEFAULT_INACTIVE_UPDATE_INTERVAL))
+        self._activePollInterval = int(customParams.get(PARAM_ACTIVE_UPDATE_INTERVAL, DEFAULT_ACTIVE_UPDATE_INTERVAL))
+        self._inactivePollInterval = int(customParams.get(PARAM_INACTIVE_UPDATE_INTERVAL, DEFAULT_INACTIVE_UPDATE_INTERVAL))
 
         # create a connection to the MyQ cloud service
         conn = MyQ(ttl, LOGGER)
@@ -225,9 +227,12 @@ class Controller(polyinterface.Controller):
         if rc == API_LOGIN_BAD_AUTHENTICATION:
             LOGGER.warning("Bad username or password specified.")
             self.addNotice("Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver.")
+            self.poly.stop() # stop the nodeserver so that the user chek the credentials
             return
         elif rc == API_LOGIN_ERROR:
             LOGGER.error("Error logging into MyQ service.")
+            self.addNotice("There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver.")
+            self.poly.stop()
             return
 
         # load nodes previously saved to the polyglot database
@@ -339,15 +344,15 @@ class Controller(polyinterface.Controller):
         currentTime = time.time()
 
         # check for elapsed polling interval
-        if ((self._activePolling and (currentTime - self._last_poll) >= self._active_poll) or
-                (not self._activePolling and (currentTime - self._last_poll) >= self._inactive_poll)):
+        if ((self._activePolling and (currentTime - self._lastPoll) >= self._activePollInterval) or
+                (not self._activePolling and (currentTime - self._lastPoll) >= self._inactivePollInterval)):
 
             # update the node states
             LOGGER.debug("Updating node states in Controller.shortPoll()...")
             self.updateNodeStates()
 
         # reset active flag if active interval has lapsed
-        if self._last_active < (currentTime - ACTIVE_UPDATE_DURATION):
+        if self._lastActive < (currentTime - ACTIVE_UPDATE_DURATION):
             self._activePolling = False
 
     # discover MyQ devices in account 
@@ -489,7 +494,7 @@ class Controller(polyinterface.Controller):
         self.setDriver("GV0", serviceStatus, True, forceReport)
 
         # Update the last polling time
-        self._last_poll = time.time()
+        self._lastPoll = time.time()
 
      # helper method for storing custom data
     def addCustomData(self, key, data):
@@ -542,7 +547,12 @@ def getLampState(state):
 
 # Calculate an elapsed time since the provided UTC string
 def calcElapsedSecs(utcTimeString):
-    return 35 # placeholder
+    
+    # translate utcTimeString into datetime value
+    dt = datetime.strptime(utcTimeString[:26], "%Y-%m-%dT%H:%M:%S.%f")
+
+    # return the total number of seconds between now and the specified timestring as an integer
+    return int((datetime.utcnow() - dt).total_seconds())
 
 # Removes invalid charaters and lowercase ISY Node address
 def getValidNodeAddress(s):

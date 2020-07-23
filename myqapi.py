@@ -171,8 +171,9 @@ class MyQ(object):
 
         self._logger.debug("In _performAction()...")
 
-        # update the security token if needed    
-        self._checkToken()
+        # update the security token if needed
+        # Note: no need to check token here - just send the command promptly
+        # self._checkToken() 
 
         # set the action parameter
         params = {"action_type": action}
@@ -331,6 +332,11 @@ class MyQ(object):
                 
                 return deviceList
             
+            elif response.status_code == 401:
+                
+                self._logger.error("There was an authentication error with the MyQ account: %s", deviceInfo.get("ErrorMessage", "No error message provided."))
+                return None
+
             else:
                 
                 self._logger.error("Error retrieving device list: %s", deviceInfo.get("ErrorMessage", "No error message provided."))
