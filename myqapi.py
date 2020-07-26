@@ -116,16 +116,18 @@ class MyQ(object):
             if response.status_code not in (200, 204, 401):
                 response.raise_for_status()
 
-        # Allow timeout and connection errors to be ignored - log and return false
+        # Allow (potentially) temporary network errors to be ignored - log and return None
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            self._logger.warning("HTTP %s in _call_api() failed: %s", method, str(e))
-            return False
+            self._logger.warning("Network/server error in HTTP %s in _call_api(): %s", method, str(e))
+            return None
+
+        # Bail on all other errors
         except:
             self._logger.error("Unexpected error occured: %s", sys.exc_info()[0])
             raise
 
         # uncomment the next line to dump HTTP response to log file for debugging
-        self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
+        #self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
 
         return response
 
@@ -147,7 +149,7 @@ class MyQ(object):
             # call the login API
             response = self._call_api(_API_LOGIN, params=params)
         
-            if response:
+            if response is not None:
                 
                 authInfo = response.json()
             
@@ -160,7 +162,7 @@ class MyQ(object):
                 else:
                     
                     # otherwise just log it and try to keep going with current tokens
-                    self._logger.error("Error retrieving security token: %s", response.json().get("ErrorMessage", "No error message provided."))
+                    self._logger.error("Error retrieving security token: %d - %s", response.json().get("code"), response.json().get("description"))
 
             else:
                     # logged in _call_api()
@@ -179,12 +181,12 @@ class MyQ(object):
         params = {"action_type": action}
         response = self._call_api(_API_DEVICE_ACTION, deviceID, params)
 
-        if response:
+        if response is not None:
             
             if response.status_code == 204:
                 return True
             else:
-                self._logger.error("Error performing device action for device ID %s: %s", deviceID, response.json().get("ErrorMessage", "No error message provided."))
+                self._logger.error("Error performing device action for device ID %s: %s", deviceID,  _parseResponseMsg(response))
                 return False
 
         else:
@@ -210,10 +212,10 @@ class MyQ(object):
         }
 
         # call the login API
-        response  = self._call_api(_API_LOGIN, params=params)
+        response = self._call_api(_API_LOGIN, params=params)
         
         # if data returned, parse the access tokens and store in the instance variables
-        if response:
+        if response is not None:
         
             authInfo = response.json()
         
@@ -238,20 +240,21 @@ class MyQ(object):
                     return API_LOGIN_SUCCESS
                 else:
 
-                    self._logger.error("Error retrieving account ID: %s", response.json().get("ErrorMessage", "No error message provided."))
+                    self._logger.error("Error retrieving account ID: %s",  _parseResponseMsg(response))
                     return API_LOGIN_ERROR
 
-            # check for authentication error (bad credentials)
+            # check for authentication error (most likely bad credentials)
             elif response.status_code == 401:
 
+                self._logger.warning("Authentication error logging into MyQ service: %s",  _parseResponseMsg(response))
                 return API_LOGIN_BAD_AUTHENTICATION
 
             else:
-                self._logger.error("Error logging into MyQ service: %s", authInfo.get("ErrorMessage", "No error message provided."))
+                self._logger.error("Error logging into MyQ service: %s",  _parseResponseMsg(response))
                 return API_LOGIN_ERROR
 
         else:
-            self._logger.error("Error logging into MyQ service.")
+            # Error logged in _call_api function
             return API_LOGIN_ERROR
 
     def getDeviceList(self):
@@ -267,7 +270,7 @@ class MyQ(object):
 
         response = self._call_api(_API_GET_DEVICE_LIST )
 
-        if response:
+        if response is not None:
 
             deviceInfo = response.json()
             
@@ -334,12 +337,12 @@ class MyQ(object):
             
             elif response.status_code == 401:
                 
-                self._logger.error("There was an authentication error with the MyQ account: %s", deviceInfo.get("ErrorMessage", "No error message provided."))
+                self._logger.error("There was an authentication error with the MyQ account: %s",  _parseResponseMsg(response))
                 return None
 
             else:
                 
-                self._logger.error("Error retrieving device list: %s", deviceInfo.get("ErrorMessage", "No error message provided."))
+                self._logger.error("Error retrieving device list: %s",  _parseResponseMsg(response))
                 return None
 
         else:
@@ -388,3 +391,15 @@ class MyQ(object):
         """
         
         self._session.close()
+
+# provide a consistent parsing of HTTP response messages for logging
+def _parseResponseMsg(response):
+
+    # should never be None, but just to be safe
+    if response is not None:
+        r = response.json()
+        msg = "{} - {}: {}".format(r.get("code", "N/A"), r.get("message", "N/A"), r.get("description", "No message provided."))
+    else:
+        msg = "No error message provided."
+    
+    return msg

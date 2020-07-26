@@ -211,7 +211,7 @@ class Controller(polyinterface.Controller):
             LOGGER.warning("Missing MyQ service credentials in configuration.")
             self.addNotice("The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver.")
             self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
-            self.poly.stop() # stop the nodeserver so that the user can setup the custom parameters
+            self.stopMe() # stop the nodeserver so that the user can setup the custom parameters
             return
 
         # get remaining optional custom parameters 
@@ -225,14 +225,12 @@ class Controller(polyinterface.Controller):
         # login using the provided credentials
         rc = conn.loginToService(userName, password)
         if rc == API_LOGIN_BAD_AUTHENTICATION:
-            LOGGER.warning("Bad username or password specified.")
             self.addNotice("Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver.")
-            self.poly.stop() # stop the nodeserver so that the user chek the credentials
+            self.stopMe() # stop the nodeserver so that the user chek the credentials
             return
         elif rc == API_LOGIN_ERROR:
-            LOGGER.error("Error logging into MyQ service.")
             self.addNotice("There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver.")
-            self.poly.stop()
+            self.stopMe()
             return
 
         # load nodes previously saved to the polyglot database
@@ -507,6 +505,11 @@ class Controller(polyinterface.Controller):
 
         # return data from custom data for key
         return self._customData.get(key)
+
+    # sends a stop command for the nodeserver to Polyglot
+    def stopMe(self):
+        LOGGER.info('Asking Polyglot to stop me.')
+        self.poly.send({"stop": {}})
 
     drivers = [
         {"driver": "ST", "value": 0, "uom": ISY_BOOL_UOM},
