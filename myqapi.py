@@ -127,7 +127,7 @@ class MyQ(object):
             raise
 
         # uncomment the next line to dump HTTP response to log file for debugging
-        self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
+        #self._logger.debug("HTTP response code: %d data: %s", response.status_code, response.text)
 
         return response
 
