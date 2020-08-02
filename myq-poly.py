@@ -3,10 +3,12 @@
 Polglot v2 NodeServer for Chamberlain LiftMaster Garage Door Openers through MyQ Cloud Service
 by Goose66 (W. Randy King) kingwrandy@gmail.com
 """
+PGC = False
 try:
     import polyinterface
 except ImportError:
     import pgc_interface as polyinterface
+    PGC = True
 import sys
 import re
 import time
@@ -45,6 +47,12 @@ DEFAULT_INACTIVE_UPDATE_INTERVAL = 60
 
 ACTIVE_UPDATE_DURATION = 300 # 5 minutes of active polling and then switch to inactive
 
+# account for PGC 
+if PGC:
+    NODE_DEF_ID_KEY = "nodedefid"
+else:
+    NODE_DEF_ID_KEY = "node_def_id"
+
 # Node for gateway
 class Gateway(polyinterface.Node):
 
@@ -76,7 +84,7 @@ class MyQ_Device(polyinterface.Node):
         if deviceID is None:
 
             # retrieve the deviceID from polyglot custom data
-            cData = controller.getCustomData(addr)
+            cData = self.controller.getCustomData(addr)
             self._deviceID = cData
 
         else:
@@ -84,7 +92,7 @@ class MyQ_Device(polyinterface.Node):
 
             # store instance variables in polyglot custom data
             cData = self._deviceID
-            controller.addCustomData(addr, cData)
+            self.controller.addCustomData(addr, cData)
 
 # Node for a garage door opener
 class GarageDoorOpener(MyQ_Device):
@@ -100,7 +108,7 @@ class GarageDoorOpener(MyQ_Device):
         # Place the controller in active polling mode
         self.controller.setActiveMode()
 
-        if self.parent.myQConnection.open(self._deviceID):
+        if self.controller.myQConnection.open(self._deviceID):
             self.setDriver("ST", IX_GDO_ST_OPENING)
         else:
             LOGGER.warning("Call to open() failed in DON command handler.")
@@ -113,7 +121,7 @@ class GarageDoorOpener(MyQ_Device):
         # Place the controller in active polling mode
         self.controller.setActiveMode()
 
-        if self.parent.myQConnection.close(self._deviceID):
+        if self.controller.myQConnection.close(self._deviceID):
             self.setDriver("ST", IX_GDO_ST_CLOSING)
         else:
             LOGGER.warning("Call to close() failed in DOF command handler.")
@@ -141,7 +149,7 @@ class Light(MyQ_Device):
         # Place the controller in active polling mode
         self.controller.setActiveMode()
 
-        if self.parent.myQConnection.turnOn(self._deviceID):
+        if self.controller.myQConnection.turnOn(self._deviceID):
             self.setDriver("ST", IX_LIGHT_ON)
         else:
             LOGGER.warning("Call to turnOn() failed in DON command handler.")
@@ -155,7 +163,7 @@ class Light(MyQ_Device):
         # Place the controller in active polling mode
         self.controller.setActiveMode()
 
-        if self.parent.myQConnection.turnOff(self._deviceID):
+        if self.controller.myQConnection.turnOff(self._deviceID):
             self.setDriver("ST", IX_LIGHT_OFF)
         else:
             LOGGER.warning("Call to turnOff() failed in DOF command handler.")
@@ -209,7 +217,7 @@ class Controller(polyinterface.Controller):
             password = customParams[PARAM_PASSWORD]
         except KeyError:
             LOGGER.warning("Missing MyQ service credentials in configuration.")
-            self.addNotice("The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver.")
+            self.addNotice({"missing_creds": "The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver."})
             self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
             self.stopMe() # stop the nodeserver so that the user can setup the custom parameters
             return
@@ -225,11 +233,11 @@ class Controller(polyinterface.Controller):
         # login using the provided credentials
         rc = conn.loginToService(userName, password)
         if rc == API_LOGIN_BAD_AUTHENTICATION:
-            self.addNotice("Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver.")
+            self.addNotice({"bad_auth":"Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver."})
             self.stopMe() # stop the nodeserver so that the user chek the credentials
             return
         elif rc == API_LOGIN_ERROR:
-            self.addNotice("There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver.")
+            self.addNotice({"login_error":"There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver."})
             self.stopMe()
             return
 
@@ -239,22 +247,22 @@ class Controller(polyinterface.Controller):
         # first pass for gateway nodes
         for addr in self._nodes:           
             node = self._nodes[addr]
-            if node["node_def_id"] == "GATEWAY":
+            if node[NODE_DEF_ID_KEY] == "GATEWAY":
                 
-                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node["node_def_id"])
+                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
                 self.addNode(Gateway(self, node["primary"], addr, node["name"]))
 
         # second pass for device nodes
         for addr in self._nodes:         
             node = self._nodes[addr]    
-            if node["node_def_id"] not in ("CONTROLLER", "GATEWAY"):
+            if node[NODE_DEF_ID_KEY] not in ("CONTROLLER", "GATEWAY"):
 
-                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node["node_def_id"])
+                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
 
                 # add device and temperature controller nodes
-                if node["node_def_id"] == "GARAGE_DOOR_OPENER":
+                if node[NODE_DEF_ID_KEY] == "GARAGE_DOOR_OPENER":
                     self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
-                if node["node_def_id"] == "LIGHT":
+                if node[NODE_DEF_ID_KEY] == "LIGHT":
                     self.addNode(Light(self, self.address, addr, node["name"]))
 
         # set the object level connection variable
@@ -363,7 +371,7 @@ class Controller(polyinterface.Controller):
         devices = self.myQConnection.getDeviceList()
 
         if devices is None:
-            self.addNotice(f"Could not discover devices from MyQ Account. The MyQ service may be offline.")
+            self.addNotice({"no_devices":"Could not discover devices from MyQ Account. The MyQ service may be offline."})
             LOGGER.warning("getDeviceList() returned no devices.")
 
         else:
@@ -392,7 +400,7 @@ class Controller(polyinterface.Controller):
                         self.addNode(gwNode)
 
                         # update the state value for the gateway node (ST = Online)
-                        gwNode.setDriver("ST", int(device["online"]))
+                        gwNode.setDriver("ST", int(device["online"]), True, True)
 
             # second pass for device nodes
             for device in devices:
@@ -419,8 +427,8 @@ class Controller(polyinterface.Controller):
                             self.addNode(devNode)
 
                             # update the state values for the opener node
-                            devNode.setDriver("ST", getDoorState(device["state"]))
-                            devNode.setDriver("GV0", calcElapsedSecs(device["last_changed"]))
+                            devNode.setDriver("ST", getDoorState(device["state"]), True, True)
+                            devNode.setDriver("GV0", calcElapsedSecs(device["last_changed"]), True, True)
          
                         # add lamp nodes
                         elif device["type"] == API_DEVICE_TYPE_LAMP:
@@ -435,10 +443,10 @@ class Controller(polyinterface.Controller):
                             self.addNode(devNode)
 
                             # update the state values for the light node
-                            devNode.setDriver("ST", getLampState(device["state"]))
+                            devNode.setDriver("ST", getLampState(device["state"]), True, True)
 
-                # send custom data added by new nodes to polyglot
-                self.saveCustomData(self._customData)
+            # send custom data added by new nodes to polyglot
+            self.saveCustomData(self._customData)
     
     # update the state of all nodes from the MyQ service
     # Parameters:
@@ -548,12 +556,12 @@ def getLampState(state):
     else:
         return IX_LIGHT_UNKNOWN
 
-# Calculate an elapsed time since the provided UTC string
-def calcElapsedSecs(utcTimeString):
+# Calculate an elapsed time since the provided timestamp string
+def calcElapsedSecs(timestamp):
     
-    # translate utcTimeString into datetime value
-    dt = datetime.strptime(utcTimeString[:26], "%Y-%m-%dT%H:%M:%S.%f")
-
+    # translate timestamp string into datetime value
+    dt = datetime.strptime(timestamp[:19], "%Y-%m-%dT%H:%M:%S")
+    
     # return the total number of seconds between now and the specified timestring as an integer
     return int((datetime.utcnow() - dt).total_seconds())
 
