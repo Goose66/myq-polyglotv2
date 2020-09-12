@@ -52,6 +52,7 @@ _API_DEVICE_ACTION_TURN_OFF = "turnoff"
 API_DEVICE_TYPE_GATEWAY = "gateway"
 API_DEVICE_TYPE_OPENER = "garagedoor"
 API_DEVICE_TYPE_LAMP = "lamp"
+API_DEVICE_TYPE_CAMERA = "hawkeyecamera"
 API_DEVICE_STATE_OPEN = "open"
 API_DEVICE_STATE_CLOSED = "closed"
 API_DEVICE_STATE_STOPPED = "stopped"
@@ -283,15 +284,19 @@ class MyQ(object):
                     # pull out common attributes
                     deviceID = dev["serial_number"]
                     deviceType = dev["device_family"]
-                    description = dev["name"]
-                    online = dev["state"]["online"]
-                    lastUpdated = dev["state"]["last_status"]
+                    description = dev.get("name", deviceType + " " + deviceID[-4:])
 
                     # uncomment the next line to inspect the devices returned from the MyQ service
                     self._logger.debug("Device Found - Device ID: %s, Device Type: %s, Description: %s", deviceID, deviceType, description)
 
-                    # add gateway type devices to the list
+                    # add device to the list with properties based on type
                     if deviceType == API_DEVICE_TYPE_GATEWAY:
+
+                        # get gateway attributes
+                        online = dev["state"]["online"]
+                        lastUpdated = dev["state"]["last_status"]
+
+                        # add gateway device to list
                         deviceList.append({
                             "type": deviceType,
                             "id": deviceID,
@@ -300,38 +305,43 @@ class MyQ(object):
                             "last_updated": lastUpdated
                         })
 
-                    else:
+                    elif deviceType == API_DEVICE_TYPE_OPENER:
                         
-                        lastChanged = dev["state"]["last_update"]
+                        # get the door attributes
                         parentID = dev["parent_device_id"]                        
-                        
-                        if deviceType == API_DEVICE_TYPE_OPENER:
-    
-                            # get the door state
-                            state = dev["state"]["door_state"]
-                            deviceList.append({
-                                "type": deviceType,
-                                "id": deviceID,
-                                "parent_id": parentID,
-                                "description": description,
-                                "state": state,
-                                "last_changed": lastChanged,
-                                "last_updated": lastUpdated
-                            })
-        
-                        elif deviceType == API_DEVICE_TYPE_LAMP:
+                        state = dev["state"]["door_state"]
+                        lastChanged = dev["state"]["last_update"]
+                        lastUpdated = dev["state"]["last_status"]
 
-                            # get the lamp state
-                            state = dev["state"]["lamp_state"]              
-                            deviceList.append({
-                                "type": deviceType,
-                                "id": deviceID,
-                                "parent_id": parentID,
-                                "description": description,
-                                "state": state,
-                                "last_changed": lastChanged,
-                                "last_updated": lastUpdated
+                        # add garage door opener device to list
+                        deviceList.append({
+                            "type": deviceType,
+                            "id": deviceID,
+                            "parent_id": parentID,
+                            "description": description,
+                            "state": state,
+                            "last_changed": lastChanged,
+                            "last_updated": lastUpdated
                         })
+        
+                    elif deviceType == API_DEVICE_TYPE_LAMP:
+
+                        # get the lamp attributes
+                        parentID = dev["parent_device_id"]                        
+                        state = dev["state"]["lamp_state"]              
+                        lastChanged = dev["state"]["last_update"]
+                        lastUpdated = dev["state"]["last_status"]
+
+                        # add lamp device to list
+                        deviceList.append({
+                            "type": deviceType,
+                            "id": deviceID,
+                            "parent_id": parentID,
+                            "description": description,
+                            "state": state,
+                            "last_changed": lastChanged,
+                            "last_updated": lastUpdated
+                    })
                 
                 return deviceList
             
