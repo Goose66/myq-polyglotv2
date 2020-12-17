@@ -9,10 +9,13 @@ import sys
 import time
 import logging
 import requests
+from random import choices
+import string
 
 # Configure a module level logger for module testing
-_LOGGER = logging.getLogger(__name__)
-_LOGGER.setLevel(logging.DEBUG)
+_LOGGER = logging.getLogger()
+if not _LOGGER.hasHandlers():
+    logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
 
 # MyQ REST API v5.1 spec.
 _APP_ID = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu"
@@ -20,7 +23,7 @@ _API_HOSTNAME = "api.myqdevice.com"
 _API_HTTP_HEADERS = {
     "Content-Type": "application/json",
     "MyQApplicationId": _APP_ID,
-    "User-Agent": "okhttp/3.10.0",
+    "User-Agent": "".join(choices(string.ascii_letters + string.digits, k=10)),
     "ApiVersion": "5.1",
     "BrandId": "2",
     "Culture": "en"
