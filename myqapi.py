@@ -24,9 +24,6 @@ _API_HTTP_HEADERS = {
     "Content-Type": "application/json",
     "MyQApplicationId": _APP_ID,
     "User-Agent": "".join(choices(string.ascii_letters + string.digits, k=10)),
-    "ApiVersion": "5.1",
-    "BrandId": "2",
-    "Culture": "en"
 }
 _API_LOGIN = {
     "url": "https://{host_name}/api/v5/Login",
@@ -45,7 +42,7 @@ _API_GET_DEVICE_PROPERTIES = {
     "method": "GET"
 }
 _API_DEVICE_ACTION = {
-    "url": "https://{host_name}/api/v5.1/Accounts/{account_id}/Devices/{device_id}/Actions",
+    "url": "https://{host_name}/api/v5.1/Accounts/{account_id}/Devices/{device_id}/actions",
     "method": "PUT"
 }
 _API_DEVICE_ACTION_OPEN = "open"
