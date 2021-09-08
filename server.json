@@ -7,7 +7,7 @@
     "install_cloud": "install_cloud.sh",
     "description": "Accesses the MyQ Web Service to allow ISY 994i to control LiftMaster/Chamberlain MyQ compatible garage door openers.",
     "notice": "LifttMaster®, Chamberlain®, and MyQ® are registered trademarks of The Chamberlain Group, Inc. 845 Larch Avenue. Elmhurst, Illinois 60126-1196.",
-    "shortPoll": "5",
+    "shortPoll": "10",
     "longPoll": "60",
     "testMode": false,
     "profile_version": "2.1",
@@ -15,8 +15,8 @@
         {
            "title": "myq-poly: a Polyglot NodeServer for Liftmaster/Chamberlain MyQ Integration",
            "author": "W. Randy King (Goose66)",
-           "version": "2.1.14",
-           "date": "January 18, 2021",
+           "version": "2.2.15",
+           "date": "September 7, 2021",
            "source": "https://github.com/Goose66/myq-polyglotv2",
            "license": "https://github.com/Goose66/myq-polyglotv2/master/LICENSE"
        }

@@ -13,11 +13,12 @@ import sys
 import re
 import time
 from datetime import datetime
-from myqapi import MyQ, API_DEVICE_TYPE_GATEWAY, API_DEVICE_TYPE_OPENER, API_DEVICE_TYPE_LAMP, API_DEVICE_STATE_OPEN, API_DEVICE_STATE_CLOSED, API_DEVICE_STATE_STOPPED, API_DEVICE_STATE_OPENING, API_DEVICE_STATE_CLOSING, API_DEVICE_STATE_ON, API_DEVICE_STATE_OFF, API_LOGIN_BAD_AUTHENTICATION, API_LOGIN_ERROR, API_LOGIN_SUCCESS
+import myqapi as api
 
 LOGGER = polyinterface.LOGGER
 
-ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
+# contstants for ISY Nodeserver interface
+# ISY_OPEN_CLOSE_UOM = 79 # 0=Open, 100=Closed
 ISY_BARRIER_STATUS_UOM = 97 # 0=Closed, 100=Open, 101=Unknown, 102=Stopped, 103=Closing, 104=Opening
 ISY_INDEX_UOM = 25 # Index UOM for custom door states below (must match editor/NLS in profile)
 ISY_BOOL_UOM = 2 # Used for reporting status values for Controller and Gateway nodes
@@ -38,12 +39,6 @@ IX_LIGHT_UNKNOWN = -1
 # custom parameter values for this nodeserver
 PARAM_USERNAME = "username"
 PARAM_PASSWORD = "password"
-PARAM_TOKEN_TTL = "tokenTTL"
-DEFAULT_TOKEN_TTL = 1200
-PARAM_ACTIVE_UPDATE_INTERVAL = "activeupdateinterval"
-DEFAULT_ACTIVE_UPDATE_INTERVAL = 10
-PARAM_INACTIVE_UPDATE_INTERVAL = "inactiveupdateinterval"
-DEFAULT_INACTIVE_UPDATE_INTERVAL = 60
 
 ACTIVE_UPDATE_DURATION = 300 # 5 minutes of active polling and then switch to inactive
 
@@ -182,9 +177,9 @@ class Light(MyQ_Device):
 class Controller(polyinterface.Controller):
 
     id = "CONTROLLER"
+    _userName = ""
+    _password = ""
     _customData = {}
-    _activePollInterval = 0
-    _inactivePollInterval = 0
     _activePolling = False
     _lastActive = 0
     _lastPoll = 0
@@ -193,7 +188,7 @@ class Controller(polyinterface.Controller):
     def __init__(self, poly):
         super(Controller, self).__init__(poly)
         self.name = "MyQ Service"
-
+          
     # Start the node server
     def start(self):
 
@@ -210,95 +205,67 @@ class Controller(polyinterface.Controller):
         # remove all existing notices for the nodeserver
         self.removeNoticesAll()
 
-        # get the MyQ account credentials from custom configuration parameters
-        try:
-            customParams = self.polyConfig["customParams"]
-            userName = customParams[PARAM_USERNAME]
-            password = customParams[PARAM_PASSWORD]
-        except KeyError:
-            LOGGER.warning("Missing MyQ service credentials in configuration.")
-            self.addNotice({"missing_creds": "The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver."})
-            self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
-            self.stopMe() # stop the nodeserver so that the user can setup the custom parameters
+        # get custom configuration parameters
+        configComplete = self._getCustomParams()
+
+        # if the configuration is not complete, stop the nodeserver
+        if not configComplete:
+            self._stopMe() 
             return
 
-        # get remaining optional custom parameters 
-        ttl = int(customParams.get(PARAM_TOKEN_TTL, DEFAULT_TOKEN_TTL))
-        self._activePollInterval = int(customParams.get(PARAM_ACTIVE_UPDATE_INTERVAL, DEFAULT_ACTIVE_UPDATE_INTERVAL))
-        self._inactivePollInterval = int(customParams.get(PARAM_INACTIVE_UPDATE_INTERVAL, DEFAULT_INACTIVE_UPDATE_INTERVAL))
+        else:
 
-        # create a connection to the MyQ cloud service
-        conn = MyQ(ttl, LOGGER)
+            # load nodes previously saved to the polyglot database
+            # Note: has to be done in two passes to ensure system (primary/parent) nodes exist
+            # before device nodes
+            # first pass for gateway nodes
+            for addr in self._nodes:           
+                node = self._nodes[addr]
+                if node[NODE_DEF_ID_KEY] == "GATEWAY":
+                    
+                    LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
+                    self.addNode(Gateway(self, node["primary"], addr, node["name"]))
 
-        # login using the provided credentials
-        rc = conn.loginToService(userName, password)
-        if rc == API_LOGIN_BAD_AUTHENTICATION:
-            self.addNotice({"bad_auth":"Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver."})
-            self.stopMe() # stop the nodeserver so that the user chek the credentials
-            return
-        elif rc == API_LOGIN_ERROR:
-            self.addNotice({"login_error":"There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver."})
-            self.stopMe()
-            return
+            # second pass for device nodes
+            for addr in self._nodes:         
+                node = self._nodes[addr]    
+                if node[NODE_DEF_ID_KEY] not in ("CONTROLLER", "GATEWAY"):
 
-        # load nodes previously saved to the polyglot database
-        # Note: has to be done in two passes to ensure system (primary/parent) nodes exist
-        # before device nodes
-        # first pass for gateway nodes
-        for addr in self._nodes:           
-            node = self._nodes[addr]
-            if node[NODE_DEF_ID_KEY] == "GATEWAY":
-                
-                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
-                self.addNode(Gateway(self, node["primary"], addr, node["name"]))
+                    LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
 
-        # second pass for device nodes
-        for addr in self._nodes:         
-            node = self._nodes[addr]    
-            if node[NODE_DEF_ID_KEY] not in ("CONTROLLER", "GATEWAY"):
+                    # add device and temperature controller nodes
+                    if node[NODE_DEF_ID_KEY] == "GARAGE_DOOR_OPENER":
+                        self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
+                    if node[NODE_DEF_ID_KEY] == "LIGHT":
+                        self.addNode(Light(self, self.address, addr, node["name"]))
 
-                LOGGER.info("Adding previously saved node - addr: %s, name: %s, type: %s", addr, node["name"], node[NODE_DEF_ID_KEY])
+            # Set the nodeserver status flag to indicate nodeserver is running
+            self.setDriver("ST", 1, True, True)
 
-                # add device and temperature controller nodes
-                if node[NODE_DEF_ID_KEY] == "GARAGE_DOOR_OPENER":
-                    self.addNode(GarageDoorOpener(self, self.address, addr, node["name"]))
-                if node[NODE_DEF_ID_KEY] == "LIGHT":
-                    self.addNode(Light(self, self.address, addr, node["name"]))
-
-        # set the object level connection variable
-        self.myQConnection = conn
-
-        # Set the nodeserver status flag to indicate nodeserver is running
-        self.setDriver("ST", 1, True, True)
-
-        # Report the logger level to the ISY
-        self.setDriver("GV20", LOGGER.level, True, True)
+            # Report the logger level to the ISY
+            self.setDriver("GV20", LOGGER.level, True, True)
  
-        # update the driver values of all nodes (force report)
-        self.updateNodeStates(True)
-
-        # startup in active mode polling
-        self.setActiveMode()
-
     # shutdown the nodeserver on stop
     def stop(self):
+        
+        # shudtown the connection to the MyQ service
         if self.myQConnection is not None:
             self.myQConnection.disconnect()
 
+            # Update the service connection flag to false
+            # Note: this is currently not effective because the polyinterface won't accept
+            # any more status changes from the nodeserver
+            self.setDriver("GV1", 0, True, True)
+
         # Set the nodeserver status flag to indicate nodeserver is not running
         self.setDriver("ST", 0, True, True)
-    
-    # Set the active polling mode (short polling interval)
-    def setActiveMode(self):
-        self._activePolling = True
-        self._lastActive =  time.time()
 
-    # Run discovery for Sony devices
+    # Run discovery for devices (doors and lamps) in MyQ account
     def cmd_discover(self, command):
 
         LOGGER.info("Discover devices in cmd_discover()...")
         
-        self.discover()
+        self._discover()
 
     # Update the profile on the ISY
     def cmd_updateProfile(self, command):
@@ -333,39 +300,112 @@ class Controller(polyinterface.Controller):
         self.setActiveMode()
 
         # Update the node states and force report of all driver values
-        self.updateNodeStates(True)
+        self._updateNodeStates(True)
 
     # called every longPoll seconds (default 30)
     def longPoll(self):
 
-        pass
+        # check for myQConnection
+        if self.myQConnection is None:
+
+            LOGGER.info("Establishing initial MyQ connection in longPoll()...")
+
+            # try and establish connection to MyQ service
+            if self._establishMyQConnection():
+
+                # update the driver values of all nodes (force report)
+                self._updateNodeStates(True)
+
+                # startup active mode polling
+                self.setActiveMode()
+
+        # otherwise, poll if not in active polling mode
+        elif not self._activePolling:
+            LOGGER.info("Updating node states in longPoll()...")
+            self._updateNodeStates()          
 
     # called every shortPoll seconds (default 5)
     def shortPoll(self):
 
-        # if node server is not setup yet, return
-        if self.myQConnection == None:
-            return
+        # only run if MyQ connection is established
+        if self.myQConnection is not None:
+            
+            # if in active polling mode, then update the node states
+            if self._activePolling:
+                LOGGER.info("Updating node states in shortPoll()...")
+                self._updateNodeStates()          
 
-        currentTime = time.time()
+            # reset active flag if 5 minutes has passed
+            if self._lastActive < (time.time() - ACTIVE_UPDATE_DURATION):
+                self._activePolling = False
 
-        # check for elapsed polling interval
-        if ((self._activePolling and (currentTime - self._lastPoll) >= self._activePollInterval) or
-                (not self._activePolling and (currentTime - self._lastPoll) >= self._inactivePollInterval)):
+    # Set the active polling mode (short polling interval)
+    def setActiveMode(self):
+        self._activePolling = True
+        self._lastActive =  time.time()
+    
+    # helper method for storing custom data
+    def addCustomData(self, key, data):
 
-            # update the node states
-            LOGGER.debug("Updating node states in Controller.shortPoll()...")
-            self.updateNodeStates()
+        # add specififed data to custom data for specified key
+        self._customData.update({key: data})
 
-        # reset active flag if active interval has lapsed
-        if self._lastActive < (currentTime - ACTIVE_UPDATE_DURATION):
-            self._activePolling = False
+    # helper method for retrieve custom data
+    def getCustomData(self, key):
+
+        # return data from custom data for key
+        return self._customData.get(key)
+
+    # Get custom configuration parameter values
+    def _getCustomParams(self):
+
+        customParams = self.poly.config["customParams"] 
+        complete = True
+
+        # get the MyQ account credentials from custom configuration parameters
+        try:
+            self._userName = customParams[PARAM_USERNAME]
+            self._password = customParams[PARAM_PASSWORD]
+        except KeyError:
+            LOGGER.warning("Missing MyQ service credentials in configuration.")
+            self.addNotice({"missing_creds": "The MyQ account credentials are missing in the configuration. Please check that both the 'username' and 'password' parameter values are specified in the Custom Configuration Parameters and restart the nodeserver."})
+            self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
+            complete = False
+
+        return complete
+
+    # establish MyQ service connection
+    def _establishMyQConnection(self):
+
+        # remove existing connection error notices
+        self.removeNotice("bad_auth")
+        self.removeNotice("login_error")
+
+        # create a connection to the MyQ cloud service
+        conn = api.MyQ(LOGGER)
+
+        # login using the provided credentials
+        rc = conn.loginToService(self._userName, self._password)
+        
+        # if login and connection was successful, return true
+        if rc == api.API_LOGIN_SUCCESS:
+            
+            # store the connection object in the controller
+            self.myQConnection = conn
+            return True
+
+        elif rc == api.API_LOGIN_BAD_AUTHENTICATION:
+            self.addNotice({"bad_auth":"Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver."})
+            return False
+        else:
+            self.addNotice({"login_error":"There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver."})
+            return False
 
     # discover MyQ devices in account 
-    def discover(self):
+    def _discover(self):
 
-        # remove all existing notices for the nodeserver
-        self.removeNoticesAll()
+        # remove existing "no_devices" notices
+        self.removeNotice("no_devices")
 
         # get device details from myQ service
         devices = self.myQConnection.getDeviceList()
@@ -382,7 +422,7 @@ class Controller(polyinterface.Controller):
             # first pass for gateway nodes
             for device in devices:
     
-                if device["type"] == API_DEVICE_TYPE_GATEWAY:
+                if device["type"] == api.API_DEVICE_TYPE_GATEWAY:
                     
                     devAddr = getValidNodeAddress(device["id"])
 
@@ -405,7 +445,7 @@ class Controller(polyinterface.Controller):
             # second pass for device nodes
             for device in devices:
     
-                if device["type"] in (API_DEVICE_TYPE_OPENER, API_DEVICE_TYPE_LAMP):
+                if device["type"] in (api.API_DEVICE_TYPE_OPENER, api.API_DEVICE_TYPE_LAMP):
 
                     devAddr = getValidNodeAddress(device["id"])
                 
@@ -415,7 +455,7 @@ class Controller(polyinterface.Controller):
                         LOGGER.info("Discovered new device - id: %s, name: %s, type: %s", device["id"], device["description"], device["type"])
 
                         # add opener nodes
-                        if device["type"] == API_DEVICE_TYPE_OPENER:
+                        if device["type"] == api.API_DEVICE_TYPE_OPENER:
                     
                             devNode = GarageDoorOpener(
                                 self,
@@ -431,7 +471,7 @@ class Controller(polyinterface.Controller):
                             devNode.setDriver("GV0", calcElapsedSecs(device["last_changed"]), True, True)
          
                         # add lamp nodes
-                        elif device["type"] == API_DEVICE_TYPE_LAMP:
+                        elif device["type"] == api.API_DEVICE_TYPE_LAMP:
                     
                             devNode = Light(
                                 self,
@@ -451,7 +491,7 @@ class Controller(polyinterface.Controller):
     # update the state of all nodes from the MyQ service
     # Parameters:
     #   forceReport - force reporting of all driver values (for query)
-    def updateNodeStates(self, forceReport=False):
+    def _updateNodeStates(self, forceReport=False):
 
         # initially set driver values for controller to false to reflect service connection is gone
         serviceStatus = 0
@@ -475,12 +515,12 @@ class Controller(polyinterface.Controller):
                     node = self.nodes[devAddr]                
                 
                     # set the state values based on the device type
-                    if device["type"] == API_DEVICE_TYPE_GATEWAY:
+                    if device["type"] == api.API_DEVICE_TYPE_GATEWAY:
                         
                         # update the state value for the gateway node (ST = Online)
                         node.setDriver("ST", int(device["online"]), True, forceReport)
 
-                    elif device["type"] == API_DEVICE_TYPE_OPENER:
+                    elif device["type"] == api.API_DEVICE_TYPE_OPENER:
 
                         # update the state values for the opener node
                         value = getDoorState(device["state"])
@@ -491,7 +531,7 @@ class Controller(polyinterface.Controller):
                         if value in [IX_GDO_ST_CLOSING, IX_GDO_ST_OPENING, IX_GDO_ST_UNKNOWN]:
                             self.setActiveMode()
         
-                    elif device["type"] == API_DEVICE_TYPE_LAMP:
+                    elif device["type"] == api.API_DEVICE_TYPE_LAMP:
     
                         # update the state values for the light node
                         node.setDriver("ST", getLampState(device["state"]), True, forceReport)
@@ -502,20 +542,8 @@ class Controller(polyinterface.Controller):
         # Update the last polling time
         self._lastPoll = time.time()
 
-     # helper method for storing custom data
-    def addCustomData(self, key, data):
-
-        # add specififed data to custom data for specified key
-        self._customData.update({key: data})
-
-    # helper method for retrieve custom data
-    def getCustomData(self, key):
-
-        # return data from custom data for key
-        return self._customData.get(key)
-
     # sends a stop command for the nodeserver to Polyglot
-    def stopMe(self):
+    def _stopMe(self):
         LOGGER.info('Asking Polyglot to stop me.')
         self.poly.send({"stop": {}})
 
@@ -534,24 +562,24 @@ class Controller(polyinterface.Controller):
 # Converts state value from MyQ to custom door states setup in editor/NLS in profile:
 #   0=Closed, 1=Open, 2=Stopped, 3=Closing, 4=Opening, 9=Unknown
 def getDoorState(state):
-    if state == API_DEVICE_STATE_OPEN:  
+    if state == api.API_DEVICE_STATE_OPEN:  
         return IX_GDO_ST_OPEN
-    elif state == API_DEVICE_STATE_CLOSED:
+    elif state == api.API_DEVICE_STATE_CLOSED:
         return IX_GDO_ST_CLOSED
-    elif state == API_DEVICE_STATE_STOPPED:
+    elif state == api.API_DEVICE_STATE_STOPPED:
         return IX_GDO_ST_STOPPED
-    elif state == API_DEVICE_STATE_OPENING:
+    elif state == api.API_DEVICE_STATE_OPENING:
         return IX_GDO_ST_OPENING
-    elif state == API_DEVICE_STATE_CLOSING:
+    elif state == api.API_DEVICE_STATE_CLOSING:
         return IX_GDO_ST_CLOSING
     else:
         return IX_GDO_ST_UNKNOWN
 
 # Converts state value from MyQ to On/Off state for ISY
 def getLampState(state):
-    if state == API_DEVICE_STATE_ON:    
+    if state == api.API_DEVICE_STATE_ON:    
         return IX_LIGHT_ON
-    elif state == API_DEVICE_STATE_OFF:   
+    elif state == api.API_DEVICE_STATE_OFF:   
         return IX_LIGHT_OFF
     else:
         return IX_LIGHT_UNKNOWN

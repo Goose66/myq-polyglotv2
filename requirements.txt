@@ -1,2 +1,4 @@
 polyinterface>=2.1.0
-requests>=2.21.0
+requests>=2.22.0
+pkce>=1.0.3
+pyquery>=1.4.3
