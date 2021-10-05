@@ -76,20 +76,16 @@ API_DEVICE_STATE_CLOSING = "closing"
 API_DEVICE_STATE_ON = "on"
 API_DEVICE_STATE_OFF = "off"
 
-API_LOGIN_BAD_AUTHENTICATION = 1
-API_LOGIN_ERROR = 3
-API_LOGIN_SUCCESS = 0
+LOGIN_BAD_AUTHENTICATION = 1
+LOGIN_ERROR = 3
+LOGIN_BAD_HOME_NAME = 4
+LOGIN_SUCCESS = 0
 
 # Timeout durations for HTTP calls - defined here for easy tweaking
 _HTTP_OAUTH_TIMEOUT = 12.05
 _HTTP_GET_TIMEOUT = 12.05
 _HTTP_PUT_TIMEOUT = 3.05
 _HTTP_POST_TIMEOUT = 6.05
-
-# Module level constants
-DEVICE_TYPE_GATEWAY = 1
-DEVICE_TYPE_GARAGE_DOOR_OPENER = 2
-DEVICE_TYPE_LIGHT = 3
 
 class MyQ(object):
 
@@ -113,26 +109,30 @@ class MyQ(object):
         # set instance variables
         self._logger = logger   
 
-    def loginToService(self, userName, password):
+    def loginToService(self, userName, password, homeName=None):
         """Logs into the MyQ account and retrieves the acess token via oAuth session
 
         Parameters:
         username -- username (email address) for MyQ service (string)
         password -- password for MyQ service (string)
+        homeName -- specifies a "Home Name" for indicating which account to use if multiple accounts are present
 
         Returns:
-        code indicating login success: API_LOGIN_SUCCESS, API_LOGIN_BAD_AUTHENTICATION, API_LOGIN_ERROR
+        code indicating login success: LOGIN_SUCCESS, LOGIN_BAD_AUTHENTICATION, LOGIN_ERROR
         """
         self._logger.debug("in API loginToService()...")
 
         rc = self._oAuthRetrieveToken(userName, password)
 
-        if rc == API_LOGIN_SUCCESS:
+        if rc == LOGIN_SUCCESS:
         
             # in case the token expires before being refreshed and we have to retrieve
             # a new access token
             self._userName = userName
             self._password = password
+
+            # get the account ID and store it for subsequent calls
+            rc = self._getAccountID(homeName)
         
         return rc
 
@@ -293,7 +293,7 @@ class MyQ(object):
         # using the stored user credentials
         if currentTime - self._lastTokenUpdate > self._tokenTTL:
             rc = self._oAuthRetrieveToken(self._userName, self._password)
-            return (rc == API_LOGIN_SUCCESS)
+            return (rc == LOGIN_SUCCESS)
 
         # If the access token is within 10 minutes of expiring, then refresh
         # the access token using the oAuth refresh token
@@ -332,6 +332,37 @@ class MyQ(object):
             # Error logged in _callAPI function
             return False
 
+    # retrieve the account ID for subsequent calls
+    def _getAccountID(self, homeName):
+        
+        self._logger.debug("In _getAccountID()...")
+
+        # retrieve the accounts list from the MyQ service
+        resp = self._callAPI(_API_GET_ACCOUNT_INFO)
+        if resp and resp.status_code == 200:
+
+            accounts = resp.json()["accounts"]
+
+            # if a home name was specified, search the accounts for the home name 
+            if homeName is not None:
+                for a in accounts:
+                    if _strip(a.get("name")) == _strip(homeName):
+                        self._accountID = a["id"]
+                        return LOGIN_SUCCESS
+                
+                # if the homename was not found, return bad home name error
+                return LOGIN_BAD_HOME_NAME
+            
+            # otherwise just get the Account ID for the first listed account
+            else:
+                self._accountID = accounts[0]["id"]
+                return LOGIN_SUCCESS
+   
+        else:
+
+            self._logger.error("Error retrieving account ID: %s",  _parseResponseMsg(resp))
+            return LOGIN_ERROR        
+
     # Call the specified REST API
     def _callAPI(self, api, deviceID="", command="", useSession=False):
       
@@ -348,6 +379,7 @@ class MyQ(object):
 
 
         # uncomment the next line to dump HTTP request data to log file for debugging
+        # WARNING: this may expose credentials
         #self._logger.debug("HTTP %s to %s", method, url)
 
         try:
@@ -419,21 +451,21 @@ class MyQ(object):
         # if an HTTP or network error occured, return login error code
         if respAuth is None:
             self._logger.debug("Error in Step 1 of oAuth flow.")
-            return API_LOGIN_ERROR
+            return LOGIN_ERROR
 
         # Step 2: Post back to the MyQ login page with the provided credentials and values parsed from the login page
 
         # get the set cookie from the response headers
         setCookie = respAuth.headers["Set-Cookie"]
 
-        # get the verification token input field value from the login form
+        # get the verification token input field value from the login form HTML
         docAuth = PyQuery(respAuth.text)
         requestVerificationToken = docAuth("input[name='__RequestVerificationToken']").attr("value")
 
         # verify verification token was retrieved
         if not requestVerificationToken:
             self._logger.warning("Unable to complete OAuth login. The verification token could not be retrieved")
-            return API_LOGIN_ERROR
+            return LOGIN_ERROR
 
         # format the data for the POST 
         data={
@@ -458,12 +490,12 @@ class MyQ(object):
         # if an HTTP or network error occured, return login error code
         if respLogin is None:
             self._logger.debug("Error in Step 2 of oAuth flow.")
-            return API_LOGIN_ERROR
+            return LOGIN_ERROR
 
         # if we didn't get back at least 2 cookies, then likely authentication failed
         if len(respLogin.cookies) < 2:
             self._logger.warning("Error logging into MyQ service - invalid MyQ credentials provided.")
-            return API_LOGIN_BAD_AUTHENTICATION
+            return LOGIN_BAD_AUTHENTICATION
 
         # Step 3: Intercept the redirect back to the MyQ iOS app
 
@@ -487,7 +519,7 @@ class MyQ(object):
         # if an HTTP or network error occured, return login error code
         if respRedirect is None:
             self._logger.debug("Error in Step 3 of oAuth flow.")
-            return API_LOGIN_ERROR
+            return LOGIN_ERROR
 
         # Step 4: Retrieve the access tokens     
                          
@@ -520,7 +552,7 @@ class MyQ(object):
         # if an HTTP or network error occured, return login error code
         if respToken is None:
             self._logger.debug("Error in Step 4 of oAuth flow.")
-            return API_LOGIN_ERROR
+            return LOGIN_ERROR
                       
         # Get the token from the response and add it to the session headers
         tokenInfo = respToken.json()
@@ -530,20 +562,7 @@ class MyQ(object):
         self._tokenTTL = tokenInfo.get("expires_in", _OAUTH_TOKEN_TTL)
         self._lastTokenUpdate = time.time()
 
-        # retrieve the account ID from the MyQ service for subsequent calls
-        respAcctInfo = self._callAPI(_API_GET_ACCOUNT_INFO)
-        if respAcctInfo and respAcctInfo.status_code == 200:
-
-            # get the Account ID for the first listed account
-            accounts = respAcctInfo.json()["accounts"]
-            self._accountID = accounts[0]["id"]
-
-            return API_LOGIN_SUCCESS
-   
-        else:
-
-            self._logger.error("Error retrieving account ID: %s",  _parseResponseMsg(respAcctInfo))
-            return API_LOGIN_ERROR        
+        return LOGIN_SUCCESS   
 
     def _oAuthRefreshToken(self):
 
@@ -611,7 +630,6 @@ class MyQ(object):
             )
             
             # raise any codes other than 200 and 302 for error handling
-            # TO-DO: Update this list for user error (e.g., bad credential) error handling
             if response.status_code not in (200, 302):
                 response.raise_for_status()
 
@@ -638,3 +656,7 @@ def _parseResponseMsg(response):
         msg = "No error message provided."
     
     return msg
+
+# return a string stripped of case, puncutation, and spaces
+def _strip(string):
+    return ''.join([letter.lower() for letter in ''.join(string) if letter.isalnum()])

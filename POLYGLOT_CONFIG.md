@@ -7,3 +7,4 @@
 #### Custom Configuration Parameters:
 - key: username, value: username (email address) for MyQ online account (required)
 - key: password, value: password for MyQ online account (required)
+- key: homename, value: home name from which to load devices (if your account has access to multiple homes) (optional)

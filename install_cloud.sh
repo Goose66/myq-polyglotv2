@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-pip3 install -r requirements_cloud.txt 
+sudo apt-get install -y python3-pyquery 
+
+pip install -r requirements_cloud.txt 

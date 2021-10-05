@@ -39,6 +39,7 @@ IX_LIGHT_UNKNOWN = -1
 # custom parameter values for this nodeserver
 PARAM_USERNAME = "username"
 PARAM_PASSWORD = "password"
+PARAM_HOME_NAME = "homename"
 
 ACTIVE_UPDATE_DURATION = 300 # 5 minutes of active polling and then switch to inactive
 
@@ -179,6 +180,7 @@ class Controller(polyinterface.Controller):
     id = "CONTROLLER"
     _userName = ""
     _password = ""
+    _homeName = None
     _customData = {}
     _activePolling = False
     _lastActive = 0
@@ -372,6 +374,9 @@ class Controller(polyinterface.Controller):
             self.addCustomParam({PARAM_USERNAME: "<email address>", PARAM_PASSWORD: "<password>"})
             complete = False
 
+        # get the optional home name configuration parameter
+        self._homeName = customParams.get(PARAM_HOME_NAME)
+
         return complete
 
     # establish MyQ service connection
@@ -379,23 +384,27 @@ class Controller(polyinterface.Controller):
 
         # remove existing connection error notices
         self.removeNotice("bad_auth")
+        self.removeNotice("bad_parm")
         self.removeNotice("login_error")
 
         # create a connection to the MyQ cloud service
         conn = api.MyQ(LOGGER)
 
         # login using the provided credentials
-        rc = conn.loginToService(self._userName, self._password)
+        rc = conn.loginToService(self._userName, self._password, self._homeName)
         
         # if login and connection was successful, return true
-        if rc == api.API_LOGIN_SUCCESS:
+        if rc == api.LOGIN_SUCCESS:
             
             # store the connection object in the controller
             self.myQConnection = conn
             return True
 
-        elif rc == api.API_LOGIN_BAD_AUTHENTICATION:
+        elif rc == api.LOGIN_BAD_AUTHENTICATION:
             self.addNotice({"bad_auth":"Could not login to the MyQ service with the specified credentials. Please check the 'username' and 'password' parameter values in the Custom Configuration Parameters and restart the nodeserver."})
+            return False
+        elif rc == api.LOGIN_BAD_HOME_NAME:
+            self.addNotice({"bad_parm":"Could not find the specified Home Name in the accounts from the MyQ service. Please check the 'homename' parameter value in the Custom Configuration Parameters and restart the nodeserver."})
             return False
         else:
             self.addNotice({"login_error":"There was an error connecting to the MyQ service. Please check the log files and correct the issue before restarting the nodeserver."})
