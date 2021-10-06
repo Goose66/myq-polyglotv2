@@ -383,9 +383,12 @@ class Controller(polyinterface.Controller):
     def _establishMyQConnection(self):
 
         # remove existing connection error notices
-        self.removeNotice("bad_auth")
-        self.removeNotice("bad_parm")
-        self.removeNotice("login_error")
+        if PGC:
+            self.removeNoticesAll()
+        else:
+            self.removeNotice("bad_auth")
+            self.removeNotice("bad_parm")
+            self.removeNotice("login_error")
 
         # create a connection to the MyQ cloud service
         conn = api.MyQ(LOGGER)
@@ -414,7 +417,10 @@ class Controller(polyinterface.Controller):
     def _discover(self):
 
         # remove existing "no_devices" notices
-        self.removeNotice("no_devices")
+        if PGC:
+            self.removeNoticesAll()
+        else:
+            self.removeNotice("no_devices")
 
         # get device details from myQ service
         devices = self.myQConnection.getDeviceList()
